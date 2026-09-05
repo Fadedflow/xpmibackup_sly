@@ -1,6 +1,8 @@
 package com.suileyan.xpmibackup.hook;
 
 import android.view.View;
+
+import java.io.File;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -63,6 +65,7 @@ public class RootModulesHook {
         hookServiceCollect(cl);
         hookRestoreSelect(cl);
         hookDescriptorBakFile(cl);
+        hookStagingCleanup(cl);
         LogHelp.i(TAG, "RootModulesHook: installed (listHook=" + listHookOk + ", titleHook=" + titleHookOk + ")");
     }
 
@@ -563,6 +566,122 @@ public class RootModulesHook {
         } catch (Throwable e) {
             LogHelp.w(TAG, "RootModulesHook.Utils: H0 hook 失败 " + e.getMessage());
         }
+    }
+
+
+    /** 暂存抢救：原生恢复把 backup_.zip 下载到 AllBackupTemp 暂存区、解出 tar 后，
+     *  H0() 会清空暂存目录——tar 随之丢失，模块 App 的指纹检测永远抓不到。
+     *  hook 清理方法（pre）：把暂存区的模块 tar/zip 抢救到 RootModules/，
+     *  App 侧指纹变化 → 自动弹恢复提示。按文件大小去重（应用内备份刚生成的
+     *  同大小 tar 已在 RootModules/，不重复抢救、不误弹）。 */
+    private void hookStagingCleanup(ClassLoader cl) {
+        var svc = HookCompat.findClassAny(cl, "RootModulesHook.NASTransferService",
+                "NAS 传输服务", "com.miui.backup.nas.NASTransferService");
+        if (svc == null) return;
+        java.lang.reflect.Method h0 = null;
+        try {
+            h0 = XposedHelpers.findMethodExactIfExists(svc, "H0");
+        } catch (Throwable ignored) {
+        }
+        if (h0 == null) {
+            for (var m : svc.getDeclaredMethods()) {
+                if (m.getParameterCount() == 0 && m.getReturnType() == void.class) {
+                    // 无参 void 方法可能多个，仅在方法体内引用过暂存路径时才可放心；
+                    // 保守起见只认名字 H0，漂移时打日志人工跟进
+                    continue;
+                }
+            }
+            LogHelp.w(TAG, "RootModulesHook.NASTransferService: 未找到暂存清理方法 H0");
+            return;
+        }
+        try {
+            de.robv.android.xposed.XposedBridge.hookMethod(h0, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    try {
+                        rescueStaging();
+                    } catch (Throwable e) {
+                        LogHelp.w(TAG, "暂存抢救失败 " + e.getMessage());
+                    }
+                }
+            });
+            LogHelp.i(TAG, "RootModulesHook.NASTransferService: 暂存抢救已挂 H0");
+        } catch (Throwable e) {
+            LogHelp.w(TAG, "RootModulesHook.NASTransferService: H0 hook 失败 " + e.getMessage());
+        }
+    }
+
+    /** 扫描 AllBackupTemp 暂存区，把模块 tar/zip 抢救到 RootModules/ */
+    private void rescueStaging() {
+        var base = new File(com.suileyan.comm.ConfigHelp.BACKUP_ROOT + "/AllBackupTemp/miback");
+        if (!base.isDirectory()) return;
+        var destDir = new File(com.suileyan.comm.RootModulesHelp.modulesDir());
+        if (!destDir.isDirectory() && !destDir.mkdirs()) return;
+        var candidates = new java.util.ArrayList<File>();
+        candidates.add(base);
+        var subs = base.listFiles();
+        if (subs != null) {
+            for (var d : subs) {
+                if (d.isDirectory()) candidates.add(d);
+            }
+        }
+        var rescued = 0;
+        for (var dir : candidates) {
+            var files = dir.listFiles();
+            if (files == null) continue;
+            for (var f : files) {
+                if (!f.isFile()) continue;
+                var name = f.getName();
+                if (name.endsWith(".tar") && name.startsWith("root_modules_")) {
+                    if (copyIfNew(f, destDir, f.getName())) rescued++;
+                } else if (name.startsWith("backup_") && name.endsWith(".zip")) {
+                    if (extractRootModulesTar(f, destDir)) rescued++;
+                }
+            }
+        }
+        if (rescued > 0) {
+            LogHelp.i(TAG, "暂存抢救: 已保存 " + rescued + " 个模块快照到 RootModules/");
+        }
+    }
+
+    /** 同大小文件已存在则跳过（应用内备份刚生成的 tar 已在 RootModules/） */
+    private boolean copyIfNew(File src, File destDir, String targetName) {
+        var target = new File(destDir, targetName);
+        if (target.exists() && target.length() == src.length()) return false;
+        try {
+            java.nio.file.Files.copy(src.toPath(), target.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return true;
+        } catch (Exception e) {
+            LogHelp.w(TAG, "抢救复制失败 " + src.getName() + ": " + e.getMessage());
+            return false;
+        }
+    }
+
+    /** 从备份 zip 中解出 root_modules tar，保存为 root_modules_restored_*.tar */
+    private boolean extractRootModulesTar(File zip, File destDir) {
+        try (var zf = new java.util.zip.ZipFile(zip)) {
+            var entries = zf.entries();
+            while (entries.hasMoreElements()) {
+                var entry = entries.nextElement();
+                var en = entry.getName();
+                if (en.startsWith("root_modules_") && en.endsWith(".tar")) {
+                    var baseName = en.substring(en.lastIndexOf('/') + 1);
+                    var marker = baseName.substring("root_modules_".length(),
+                            baseName.length() - ".tar".length());
+                    var target = new File(destDir, "root_modules_restored_" + marker + ".tar");
+                    if (target.exists() && target.length() == entry.getSize()) return false;
+                    try (var in = zf.getInputStream(entry)) {
+                        java.nio.file.Files.copy(in, target.toPath(),
+                                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    }
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            LogHelp.w(TAG, "zip 解出 tar 失败 " + zip.getName() + ": " + e.getMessage());
+        }
+        return false;
     }
 
     private void hookPredictedSize(ClassLoader cl) {        var getter = HookCompat.findClassAny(cl, "RootModulesHook.TransItemSizeGetter",
