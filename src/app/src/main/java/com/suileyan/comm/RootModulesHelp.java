@@ -227,6 +227,28 @@ public final class RootModulesHelp {
         return removed;
     }
 
+    /** 统一保留策略（防 RootModules/ 无限膨胀，每个 tar 约 129MB）：
+     *  业务快照（root_modules_*，含 restored_ 变体）保留最新 2 份；
+     *  恢复前回滚快照（pre_restore_*）保留最新 1 份。
+     *  所有写入点（备份/抢救/恢复）与 App 启动兜底均调用。 */
+    public static int pruneAll(String transferDir) {
+        return pruneOldTars(transferDir, 2) + pruneSnapshots(transferDir, 1);
+    }
+
+    /** 目录内是否已存在同字节大小的 tar（近似去重：129MB 快照逐一比对内容不现实，
+     *  同大小即视为同一模块状态的快照，不再重复落盘）。 */
+    public static boolean hasSameSizeTar(String transferDir, long size) {
+        var dir = new File(transferDir);
+        var files = dir.listFiles();
+        if (files == null) return false;
+        for (var f : files) {
+            if (f.isFile() && f.getName().endsWith(TAR_SUFFIX) && f.length() == size) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * 恢复流程（模块 App 内执行，需已授予 su）：
      * 校验快照条目白名单 → 快照当前 /data/adb 状态（回滚点）→ 解包 → restorecon。
@@ -291,6 +313,7 @@ public final class RootModulesHelp {
         if (new File(tarAbsolutePath).delete()) {
             LogHelp.i(TAG, "restore: 已清理已恢复的快照");
         }
+        pruneAll(transferDir);
         return null;
     }
 
@@ -394,7 +417,7 @@ public final class RootModulesHelp {
         if (!dir.exists() && !dir.mkdirs()) {
             return "无法创建 " + transferDir;
         }
-        pruneOldTars(transferDir, 3);
+        pruneOldTars(transferDir, 2);
 
         // 1) 探测存在的源目录。
         // 注意：toybox ls 对「任一路径不存在」返回非 0（哪怕其余都在且已打印），

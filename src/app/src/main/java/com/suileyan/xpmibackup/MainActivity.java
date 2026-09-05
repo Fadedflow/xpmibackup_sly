@@ -190,6 +190,11 @@ public class MainActivity extends Activity {
         if (!"true".equals(com.suileyan.comm.ConfigHelp.getString("disclaimer_agreed", ""))) return;
         com.suileyan.comm.Async.run("tar-seen-check", () -> {
             var transfer = com.suileyan.comm.RootModulesHelp.modulesDir();
+            // 兜底收敛：清理历史遗留的多余快照（业务 keep 2 / 回滚 keep 1）
+            try {
+                com.suileyan.comm.RootModulesHelp.pruneAll(transfer);
+            } catch (Throwable ignored) {
+            }
             var stamp = com.suileyan.comm.RootModulesHelp.newestTarStamp(transfer);
             if (stamp.isEmpty()
                     || stamp.equals(com.suileyan.comm.ConfigHelp.getString("root_tar_seen", ""))) {

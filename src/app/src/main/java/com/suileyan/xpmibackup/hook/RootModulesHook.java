@@ -633,6 +633,11 @@ public class RootModulesHook {
                 if (!f.isFile()) continue;
                 var name = f.getName();
                 if (name.endsWith(".tar") && name.startsWith("root_modules_")) {
+                    // 全局按大小去重：已有同字节大小 tar 即为同一状态快照，不重复落盘
+                    if (com.suileyan.comm.RootModulesHelp.hasSameSizeTar(
+                            destDir.getAbsolutePath(), f.length())) {
+                        continue;
+                    }
                     if (copyIfNew(f, destDir, f.getName())) rescued++;
                 } else if (name.startsWith("backup_") && name.endsWith(".zip")) {
                     if (extractRootModulesTar(f, destDir)) rescued++;
@@ -642,6 +647,8 @@ public class RootModulesHook {
         if (rescued > 0) {
             LogHelp.i(TAG, "暂存抢救: 已保存 " + rescued + " 个模块快照到 RootModules/");
         }
+        // 抢救后统一收敛，防暂存多份 zip 反复抢救撑爆存储
+        com.suileyan.comm.RootModulesHelp.pruneAll(destDir.getAbsolutePath());
     }
 
     /** 同大小文件已存在则跳过（应用内备份刚生成的 tar 已在 RootModules/） */
@@ -671,6 +678,11 @@ public class RootModulesHook {
                             baseName.length() - ".tar".length());
                     var target = new File(destDir, "root_modules_restored_" + marker + ".tar");
                     if (target.exists() && target.length() == entry.getSize()) return false;
+                    // 全局按大小去重：已有同字节大小 tar 即不重复解出
+                    if (com.suileyan.comm.RootModulesHelp.hasSameSizeTar(
+                            destDir.getAbsolutePath(), entry.getSize())) {
+                        return false;
+                    }
                     try (var in = zf.getInputStream(entry)) {
                         java.nio.file.Files.copy(in, target.toPath(),
                                 java.nio.file.StandardCopyOption.REPLACE_EXISTING);
