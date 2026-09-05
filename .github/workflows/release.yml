@@ -14,8 +14,35 @@ on:
 permissions:
   contents: write
 
+# 电脑端接收器 mibackpc.exe：Go 交叉编译（纯标准库零 CGO，windows/amd64 一档即可）。
+# 产物经 artifact 传递给主 job 随 APK 一起发布；tag 与手动触发均构建。
 jobs:
+  pc-exe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.22'
+
+      - name: Build mibackpc.exe
+        run: |
+          cd pc
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dist/mibackpc.exe .
+          ls -la dist/
+
+      - name: Upload PC exe artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: mibackpc-exe
+          path: pc/dist/mibackpc.exe
+          if-no-files-found: error
+
   build:
+    needs: pc-exe
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -114,6 +141,12 @@ jobs:
           fi
           ls -la
 
+      - name: Download PC exe artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: mibackpc-exe
+          path: pc/dist
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
@@ -125,7 +158,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
-          files: src/app/build/outputs/apk/release/*.apk
+          files: |
+            src/app/build/outputs/apk/release/*.apk
+            pc/dist/mibackpc.exe
           # tag 含 "-"（如 v0.9.0-beta.1）→ pre-release；正式版（vX.Y.Z）→ 普通 Release
           prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
