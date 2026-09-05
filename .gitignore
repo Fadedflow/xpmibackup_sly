@@ -43,3 +43,11 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# mibackpc（电脑端接收器）构建产物与本地配置
+pc/mibackpc.exe
+pc/mibackpc.json
+pc/harness/build/
+pc/harness/harness_out.txt
+pc/harness_out.txt
+pc/blackbox_out.txt

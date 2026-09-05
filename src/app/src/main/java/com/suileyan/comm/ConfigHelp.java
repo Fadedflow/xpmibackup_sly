@@ -204,7 +204,7 @@ public class ConfigHelp {
         map.put("device_describe", isChineseLocale() ? "我的云端备份设备" : "My cloud backup device");
         map.put("backup_path", "MIUI/backup");
         map.put("backup_max", "5");
-        map.put("log_enabled", "false");
+        map.put("log_enabled", "true");
         map.put("protocol", "smb");
         map.put("upload_threads", "3");
         map.put("chunk_size_mb", "64");

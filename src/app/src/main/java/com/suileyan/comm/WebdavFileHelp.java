@@ -122,7 +122,17 @@ public class WebdavFileHelp {
         return builder;
     }
 
-    /** 按URL路径段编码，避免中文备份文件名在WebDAV GET/PUT时被服务器拒绝 */
+    /** 按URL路径段编码，避免中文备份文件名在WebDAV GET/PUT时被服务器拒绝。
+     *  用 String 形式 encode（API 1）：Charset 重载需 API 33，Android 11/12 会 NoSuchMethodError。
+     *  UTF-8 恒被支持，UnsupportedEncodingException 实际不会发生，包装为 RuntimeException */
+    private static String urlEncodeSegment(String segment) {
+        try {
+            return URLEncoder.encode(segment, "UTF-8").replace("+", "%20");
+        } catch (java.io.UnsupportedEncodingException e) {
+            throw new IllegalStateException("UTF-8 encoder missing", e);
+        }
+    }
+
     private static String remoteUrl(String remotePath) {
         var base = baseUrl();
         if (remotePath == null || remotePath.isEmpty()) {
@@ -136,7 +146,7 @@ public class WebdavFileHelp {
             if (encoded.length() > 0) {
                 encoded.append("/");
             }
-            encoded.append(URLEncoder.encode(part, StandardCharsets.UTF_8).replace("+", "%20"));
+            encoded.append(urlEncodeSegment(part));
         }
         return base + encoded;
     }

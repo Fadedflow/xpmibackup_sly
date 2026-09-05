@@ -98,11 +98,14 @@ public class MainActivity extends Activity {
             }
         });
 
-        // 状态栏占位：动态设置空白View高度为状态栏高度
-        var statusBarRes = getResources().getIdentifier("status_bar_height", "dimen", "android");
-        if (statusBarRes > 0) {
-            var spacer = findViewById(R.id.status_bar_spacer);
-            spacer.getLayoutParams().height = getResources().getDimensionPixelSize(statusBarRes);
+        // 状态栏占位：仅 Android 15+（targetSdk 35+ 强制 edge-to-edge）需要，
+        // Android 11~14 内容本就从状态栏下方开始，补占位会多出一段空白（HIGH-24）
+        if (Build.VERSION.SDK_INT >= 35) {
+            var statusBarRes = getResources().getIdentifier("status_bar_height", "dimen", "android");
+            if (statusBarRes > 0) {
+                var spacer = findViewById(R.id.status_bar_spacer);
+                spacer.getLayoutParams().height = getResources().getDimensionPixelSize(statusBarRes);
+            }
         }
 
         // Android 15+ 强制 edge-to-edge（targetSdk 35+，Android 9~17 适配 HIGH-24）：
@@ -229,20 +232,27 @@ public class MainActivity extends Activity {
 
     /**
      * edge-to-edge 底部适配（Android 15+ 强制，HIGH-24）：
-     * targetSdk 35+ 窗口默认延伸至导航栏区域，底部 Tab 栏需按导航栏 inset 补 padding，
-     * 避免被手势条/三键导航遮挡。API 30+ 用 WindowInsets.Type.navigationBars()；
-     * Tab 栏背景（surface 色）随窗口延伸至导航栏，内容安全避开。
-     * API 29 及以下无强制 edge-to-edge，直接跳过。
+     * targetSdk 35+ 窗口延伸至导航栏区域，Tab 栏需「加高 + 补 bottom padding」，
+     * 内容区仍保持 64dp，导航栏 inset 区域只垫背景色——否则 64dp 容器被 inset 挤压，
+     * Tab 图标/文字溢出屏幕底被裁掉（v0.9.1 真机回归在 warsaw/Android 17 实测发现）。
+     * 必须绝对值赋值：insets 可能多次派发，"+ bottom" 累加会让 padding/高度持续膨胀。
+     * Android 11~14 无强制 edge-to-edge（窗口本就在导航栏上方，insets.bottom=0），不处理。
      */
     private void applyEdgeToEdgeInsets() {
-        if (Build.VERSION.SDK_INT < 30) return;
+        if (Build.VERSION.SDK_INT < 35) return;
         try {
             var tabBar = findViewById(R.id.tab_bar_container);
             tabBar.setOnApplyWindowInsetsListener((v, insets) -> {
                 var bottom = insets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom;
-                if (bottom > 0) {
-                    v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(),
-                            v.getPaddingBottom() + bottom);
+                var dm = v.getResources().getDisplayMetrics();
+                int base = Math.round(64 * dm.density); // activity_main.xml 中 tab_bar_container 的固定高度
+                if (v.getPaddingBottom() != bottom) {
+                    v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(), bottom);
+                }
+                var lp = v.getLayoutParams();
+                if (lp != null && lp.height != base + bottom) {
+                    lp.height = base + bottom;
+                    v.setLayoutParams(lp);
                 }
                 return insets;
             });
@@ -258,9 +268,11 @@ public class MainActivity extends Activity {
 
     /**
      * 注册/更新手势返回回调（API 33+）。
-     * 预测性返回开关开启 → 注册 OnBackAnimationCallback，用 onBackProgressed 自绘"盒子推开"跟手动画
+     * API 34+ 且预测性返回开关开启 → 注册 OnBackAnimationCallback，用 onBackProgressed 自绘"盒子推开"跟手动画
      * （当前页跟手右移，露出下层页面——纯应用层动画，不依赖系统渲染）；
-     * 关闭 → 普通 OnBackInvokedCallback（无动画立即返回）。
+     * 其余（API 33，或 API 34+ 关闭开关）→ 普通 OnBackInvokedCallback（无动画立即返回）。
+     * 注意：OnBackAnimationCallback / BackEvent.getProgress() 是 API 34，不能用 33 守卫，
+     * 否则 Android 13 上实例化即 NoClassDefFoundError（Error 不被 catch(Exception) 捕获）。
      * 按键返回（onBackPressed）与手势返回统一走 handleBack()
      */
     public void updateBackInvoke() {
@@ -271,8 +283,14 @@ public class MainActivity extends Activity {
                 dispatcher.unregisterOnBackInvokedCallback(backCallback);
                 backCallbackRegistered = false;
             }
-            var enabled = !"off".equals(com.suileyan.comm.ConfigHelp.getString("predictive_back", "on"));
-            backCallback = enabled ? new BackAnimCallback() : this::handleBack;
+            var predictiveEnabled = !"off".equals(com.suileyan.comm.ConfigHelp.getString("predictive_back", "on"));
+            if (predictiveEnabled && Build.VERSION.SDK_INT >= 34) {
+                // OnBackAnimationCallback / BackEvent.getProgress() 需 API 34：
+                // Android 13 上实例化会 NoClassDefFoundError（Error 不被 catch(Exception) 捕获），故限定 34
+                backCallback = new BackAnimCallback();
+            } else {
+                backCallback = this::handleBack;
+            }
             dispatcher.registerOnBackInvokedCallback(
                     android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback);
             backCallbackRegistered = true;
@@ -282,12 +300,14 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * 手动预测性返回动画（API 33+，自绘不依赖系统渲染），通用可复用引擎：
+     * 手动预测性返回动画（API 34+，自绘不依赖系统渲染），通用可复用引擎：
      * 任意 overlay 页面层级（栈顶页 vs 其"上一层"页）自动适配——
      *   当前页跟手右移，下层"上一层"页从左侧同步滑入（推开视差，露出真实渲染的上一层）；
      *   overlay 栈底时下层自动落到 tab 层当前页；
      * Tab 层场景 → 无预测动画，onBackStarted 直接执行返回。
+     * 仅在 updateBackInvoke() 的 SDK_INT >= 34 分支实例化（OnBackAnimationCallback 需 API 34）
      */
+    @androidx.annotation.RequiresApi(34)
     private class BackAnimCallback implements android.window.OnBackAnimationCallback {
         private boolean overlayMode = false;
         private boolean animating = false;

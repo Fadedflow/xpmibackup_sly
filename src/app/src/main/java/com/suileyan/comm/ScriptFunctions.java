@@ -514,7 +514,8 @@ public final class ScriptFunctions {
                     var path = args.length > 0 ? Context.toString(args[0]) : "";
                     var data = args.length > 1 ? Context.toString(args[1]) : "";
                     try {
-                        Files.write(java.nio.file.Path.of(resolveTempPath(path)), Base64.getDecoder().decode(data));
+                        // Paths.get（API 26）：Path.of 需 API 34，Android 11~13 会 NoSuchMethodError
+                        Files.write(java.nio.file.Paths.get(resolveTempPath(path)), Base64.getDecoder().decode(data));
                     } catch (IOException e) {
                         throw new IllegalStateException("writeTempFile failed for " + path + ": " + e.getMessage(), e);
                     }
@@ -535,7 +536,7 @@ public final class ScriptFunctions {
             public Object call(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
                 try {
                     var path = args.length > 0 ? Context.toString(args[0]) : "";
-                    return Boolean.valueOf(Files.deleteIfExists(java.nio.file.Path.of(resolveTempPath(path))));
+                    return Boolean.valueOf(Files.deleteIfExists(java.nio.file.Paths.get(resolveTempPath(path))));
                 } catch (SecurityException e) {
                     throw e;
                 } catch (Exception e) {

@@ -1,6 +1,6 @@
 # MiBackup_sly - 小米云备份助手
 
-![Android](https://img.shields.io/badge/Android-9.0%E2%80%9317-blue)
+![Android](https://img.shields.io/badge/Android-11.0%E2%80%9317-blue)
 
 ![LSPosed](https://img.shields.io/badge/LSPosed-supported-green)
 
@@ -35,15 +35,15 @@
 - 多账号 / 多方案管理：NAS 方案（SMB/WebDAV/脚本）与云盘账号（139/光鸭/夸克/123/189/百度/沃盘）可并存，按需切换备份目标
 - 凭据加密存储：密码、Token、Cookie 经 AES-GCM 加密落盘，按账号隔离
 - 网盘 Token 自动刷新：光鸭 OAuth2 refresh_token 自动轮换；夸克 __puus 会话自动续期，401 自动重试；天翼 refreshToken 自动轮换 + accessToken 过期自愈
-- 大文件在 Cloud 层统一切片上传，十一种协议共用同一套切片逻辑
+- 大文件在 Cloud 层统一切片上传，十种协议共用同一套切片逻辑
 - 自动清理超出数量限制的旧备份
-- Android 9~17 全版本适配：edge-to-edge（含底部导航栏 insets）、Android 17 本地网络保护（SMB/WebDAV 专项提示）、static final 反射限制审计、配置变更行为兼容
+- Android 11~17 适配：edge-to-edge（含底部导航栏 insets，仅 Android 15+ 强制）、Android 17 本地网络保护（SMB/WebDAV 专项提示）、static final 反射限制审计、配置变更行为兼容
 - Hook 跨版本兼容（HIGH-25）：小米备份类名/混淆方法名漂移时多候选自动降级 + 诊断日志，DFS AIDL transact code 漂移可观测
 - 顶部「备份」按钮点击进入智能存储备份页，长按进入备份升级页
 
 ## 环境要求
 
-- Android 9.0 ~ 17（minSdk 28 / targetSdk 37，含 Android 17 本地网络保护与 edge-to-edge 适配）
+- Android 11.0 ~ 17（minSdk 30 / targetSdk 37，含 Android 17 本地网络保护与 edge-to-edge 适配）
 - 已安装 Xposed 框架（LSPatch / LSPosed / EdXposed 等）
 - 支持的 Xposed 作用域：`com.android.settings`、`com.miui.backup`
 
@@ -102,7 +102,7 @@
 >
 > `EncryptedCredStore` 中的 `KEY_SEED` 是硬编码在 APK 中的常量（`"xp-mibackup-credential-v1"`），用于派生主密钥：
 > - 无盐场景：`SHA-256(KEY_SEED)` 直接作为 AES-GCM 密钥
-> - 有盐场景：`PBKDF2(KEY_SEED, salt, 20000)` 派生密钥（salt 随机生成并随 creds.json 持久化）
+> - 有盐场景：`PBKDF2(KEY_SEED, salt, 600000)` 派生密钥（salt 随机生成并随 creds.json 持久化；v2 旧值 20000 读取兼容、写时自动升级）
 >
 > **已知风险**：反编译 APK 可获取 `KEY_SEED`，若同时拿到设备上的 `creds.json`（含 salt + 密文），即可重建密钥解密所有凭据。
 >
@@ -137,7 +137,7 @@ NAS 方案 Provider 实例按 profileId 缓存；云盘账号 Provider **不缓�
 | 维度     | 方案                                        |
 | ------ | ----------------------------------------- |
 | 算法     | AES-256-GCM（带 128-bit 认证标签），IV 随机且随密文存储   |
-| 密钥派生   | PBKDF2-HmacSHA256（20000 迭代），固定种子 + 随机文件盐  |
+| 密钥派生   | PBKDF2-HmacSHA256（600000 迭代，v3），固定种子 + 随机文件盐；旧格式读取兼容、写时自动升级 |
 | 跨进程一致性 | 文件盐随文件持久化，settings 与 backup 进程读同一文件得到同一密钥 |
 | 隔离     | 按 accountId / profileId 命名空间隔离，账号间互不可见    |
 | 原子写入   | 临时文件 + rename 原子替换 + 文件锁，防截断与并发覆盖         |
@@ -295,7 +295,7 @@ NAS 方案 Provider 实例按 profileId 缓存；云盘账号 Provider **不缓�
 | 字段         | 说明                     |
 | ---------- | ---------------------- |
 | `id`       | 账号唯一标识                 |
-| `provider` | 网盘类型：`139`、`guangya`、`quark`、`123`、`189` 或 `baidu` |
+| `provider` | 网盘类型：`139`、`guangya`、`quark`、`123`、`189`、`baidu` 或 `wo` |
 | `account`  | 登录账号（139 为手机号，189 为登录名） |
 | `name`     | 显示名称                   |
 
@@ -362,7 +362,7 @@ app/src/main/java/com/suileyan/
 | -------------------- | ------------------------------------------ |
 | `SettingsHook`       | 在设置 App 中注入配置入口，展示虚拟智能存储设备                 |
 | `AIDLHook`           | 模拟 DFS 服务连接，拦截上传、下载、目录查询，分发到 CloudFileHelp |
-| `CloudFileHelp`      | 统一分发十一种通道，处理跨协议切片与 AUTH_EXPIRED 重试          |
+| CloudFileHelp      | 统一分发十种通道，处理跨协议切片与 AUTH_EXPIRED 重试          |
 | `BackupHook`         | 修正备份 App 页面、通知、进度焦点和取消清理                   |
 | `AutoBackupHook`     | 接入备份 App 原生自动备份设置和调度链路                     |
 | `ProviderRegistry`   | 按备份目标（云盘账号优先，其次激活方案）取 Provider 实例          |
@@ -370,7 +370,7 @@ app/src/main/java/com/suileyan/
 
 ## 编译
 
-需要 JDK 17+ 和 Android SDK（compileSdk 36）。
+需要 JDK 17+ 和 Android SDK（compileSdk 37）。
 
 ```bash
 cd src

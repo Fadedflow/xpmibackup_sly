@@ -30,9 +30,11 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Install SDK components (platform-36 + build-tools 36.0.0)
+      # 与 app/build.gradle 的 compileSdk 37 / buildTools 37.0.0 保持同步。
+      # 注意 SDK 包名是新命名：platforms;android-17 = Android 17（platforms;android-37 不存在）
+      - name: Install SDK components (platform-37 + build-tools 37.0.0)
         run: |
-          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" --sdk_root="$ANDROID_HOME"
+          sdkmanager --install "platforms;android-17" "build-tools;37.0.0" --sdk_root="$ANDROID_HOME"
           yes | sdkmanager --licenses --sdk_root="$ANDROID_HOME" > /dev/null || true
 
       - name: Set up Gradle

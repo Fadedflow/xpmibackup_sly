@@ -814,7 +814,14 @@ public class CustomHttpFileHelp {
             }
             var sourceContext = context.createPackageContext(MODULE_PACKAGE, android.content.Context.CONTEXT_IGNORE_SECURITY);
             try (var is = sourceContext.getResources().openRawResource(R.raw.custom_default)) {
-                return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                // InputStream.readAllBytes() 需 API 33，Android 11/12 会 NoSuchMethodError（Error 不被 catch(Exception) 捕获）
+                var buf = new java.io.ByteArrayOutputStream();
+                var chunk = new byte[8192];
+                int n;
+                while ((n = is.read(chunk)) > 0) {
+                    buf.write(chunk, 0, n);
+                }
+                return new String(buf.toByteArray(), StandardCharsets.UTF_8);
             }
         } catch (Exception e) {
             LogHelp.e(TAG, "read default custom script failed", e);

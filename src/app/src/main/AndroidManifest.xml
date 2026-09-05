@@ -6,14 +6,19 @@
          注意：SMB/WebDAV 实际网络请求运行在 com.miui.backup 宿主进程，
          模块声明仅覆盖模块自身（MainActivity 连通性测试等），宿主侧依赖小米备份 APK 自身声明 -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
-    <!-- legacy 存储权限在 API 33+ 已由分区存储取代，限定到 API 32 避免冗余请求（HIGH-22） -->
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
+    <!-- legacy 存储权限（READ/WRITE_EXTERNAL_STORAGE）已随 minSdk 30 移除：
+         Android 11+ 分区存储下由 MANAGE_EXTERNAL_STORAGE 全盘文件访问覆盖 -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+
+    <!-- Root 模块备份：识别当前管理器（SukiSU/KernelSU/APatch/Magisk）以动态命名条目 -->
+    <queries>
+        <package android:name="com.sukisu.ultra" />
+        <package android:name="com.sukisu.kpm" />
+        <package android:name="me.weishu.kernelsu" />
+        <package android:name="me.bmax.apatch" />
+        <package android:name="io.github.huskydg.magisk" />
+        <package android:name="com.topjohnwu.magisk" />
+    </queries>
 
     <application
         android:label="@string/app_name"
