@@ -47,7 +47,7 @@ import okio.BufferedSink;
  * - 列目录：GET /b/api/file/list/new（code=0 成功；业务 code=403 为 IP 限流，参考实现 sleep 20s）
  * - 上传：upload_request（MD5 秒传）→ 5MB 分块 s3_repare_upload_parts_batch 预签名 PUT → complete → upload_complete
  * - 下载：download_info → DownloadUrl 中提取 params base64 → 解码 GET → data.redirect_url 最终直链
- * - 删除：/a/api/file/trash（进回收站，不签名，fileTrashInfoList 需提交列表原始条目）
+ * - 删除：/b/api/file/trash（进回收站，不签名，fileTrashInfoList 需提交列表原始条目）
  *
  * 坑点：登录响应 code=200 而业务成功 code=0（本项目不调 sign_in）；s3_repare body 用 StorageNode（大写），
  * s3_list/complete 用 storageNode（小写）；同名文件业务 code=5060（本项目按用户策略 duplicate=1 覆盖重试）。
@@ -535,7 +535,7 @@ public class Pan123Provider implements CloudProvider {
             body.put("driveId", 0);
             body.put("fileTrashInfoList", entry.raw);
             body.put("operation", true);
-            var resp = postUnsigned("/a/api/file/trash", body, null);
+            var resp = postUnsigned("/b/api/file/trash", body, null);
             requireOk(parse(resp, "trash"), "trash");
             LogHelp.i(TAG, "123云盘已移入回收站: " + remotePath + " (fileId=" + entry.fileId + ")");
         } catch (CloudException e) {
@@ -605,7 +605,7 @@ public class Pan123Provider implements CloudProvider {
         return null;
     }
 
-    /** 建目录：POST /a/api/file/upload_request（注意 /a/ 前缀，签名），返回新目录 FileId */
+    /** 建目录：POST /b/api/file/upload_request（注意 /a/ 前缀，签名），返回新目录 FileId */
     private String createFolder(String parentId, String name) throws CloudException {
         try {
             var body = new JSONObject();
@@ -619,7 +619,7 @@ public class Pan123Provider implements CloudProvider {
             body.put("NotReuse", true);
             body.put("event", "newCreateFolder");
             body.put("operateType", 1);
-            var resp = postSigned("/a/api/file/upload_request", true, body, null);
+            var resp = postSigned("/b/api/file/upload_request", true, body, null);
             var json = requireOk(parse(resp, "createFolder"), "createFolder");
             var data = json.optJSONObject("data");
             var info = data != null ? data.optJSONObject("Info") : null;
