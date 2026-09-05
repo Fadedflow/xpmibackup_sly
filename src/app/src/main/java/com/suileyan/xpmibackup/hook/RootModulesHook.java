@@ -974,8 +974,15 @@ public class RootModulesHook {
                                    android.content.Context ctx) {
         try {
             var glide = XposedHelpers.findClass("com.bumptech.glide.Glide", ctx.getClassLoader());
-            var requestManager = XposedHelpers.callStaticMethod(glide, "with", (Object) iv);
-            XposedHelpers.callMethod(requestManager, "clear", iv);
+            // 显式按参数类型匹配：with(ImageView) 依赖重载推断在部分 XposedHelpers
+            // 实现下匹配不到 with(View)/with(Context)（真机日志验证），导致 clear
+            // 从未生效、一直走回退路径（时间竞争未消除）
+            var withCtx = XposedHelpers.findMethodBestMatch(glide, "with",
+                    new Class[]{android.content.Context.class}, ctx);
+            var requestManager = withCtx.invoke(null, ctx);
+            var clearView = XposedHelpers.findMethodBestMatch(requestManager.getClass(), "clear",
+                    new Class[]{android.view.View.class}, iv);
+            clearView.invoke(requestManager, iv);
         } catch (Throwable e) {
             LogHelp.w(TAG, "Glide clear 失败（回退直接设置）" + e.getMessage());
         }

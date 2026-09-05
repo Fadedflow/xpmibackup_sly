@@ -163,6 +163,8 @@ public class BackupFragment extends Fragment {
                 var visible = new ArrayList<CloudAccount>();
                 for (var a : accounts) {
                     if (com.suileyan.cloud.CloudAccount.PROVIDER_115.equals(a.provider)) continue;
+                    // 123 云盘已撤销支持（接口不稳定）：目标选择隐藏，同 115 策略
+                    if (com.suileyan.cloud.CloudAccount.PROVIDER_123.equals(a.provider)) continue;
                     visible.add(a);
                 }
                 cloudAccounts = visible;
@@ -185,6 +187,17 @@ public class BackupFragment extends Fragment {
     private void restoreLastState() {
         try {
             var cfg = com.suileyan.comm.ConfigHelp.load();
+            // 123 云盘已撤销支持：历史备份目标若仍指向 123 账号，清除并回退，
+            // 避免跨进程 BackupTarget 继续驱动引擎向不可用的 123 上传
+            var tId = com.suileyan.cloud.BackupTarget.cloudAccountId();
+            if (tId != null) {
+                var tAcc = com.suileyan.cloud.CloudAccountStore.get(tId);
+                if (tAcc != null && com.suileyan.cloud.CloudAccount.PROVIDER_123.equals(tAcc.provider)) {
+                    com.suileyan.cloud.ProviderRegistry.clearCloudTarget();
+                    com.suileyan.comm.LogHelp.w("XpMiBackup",
+                            "backup target was 123 (withdrawn), cleared to fallback");
+                }
+            }
             var method = cfg.optString("backup_method", "nas");
             if ("cloud".equals(method)) {
                 rbCloud.setChecked(true);
