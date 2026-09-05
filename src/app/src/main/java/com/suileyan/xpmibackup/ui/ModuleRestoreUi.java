@@ -20,7 +20,7 @@ public final class ModuleRestoreUi {
     /** 选择快照并恢复（备份页「恢复 Root 模块」按钮入口） */
     public static void pickAndRestore(Activity activity) {
         com.suileyan.comm.Async.run("restore-list", () -> {
-            var tars = RootModulesHelp.listTars(ConfigHelp.BACKUP_ROOT + "/Transfer");
+            var tars = RootModulesHelp.listTars(RootModulesHelp.modulesDir());
             activity.runOnUiThread(() -> {
                 if (activity.isFinishing() || activity.isDestroyed()) return;
                 if (tars.isEmpty()) {
@@ -61,7 +61,7 @@ public final class ModuleRestoreUi {
         Toast.makeText(activity, R.string.root_modules_packing, Toast.LENGTH_SHORT).show();
         com.suileyan.comm.Async.run("restore-modules", () -> {
             var err = RootModulesHelp.restoreViaSu(tar.getAbsolutePath(),
-                    ConfigHelp.BACKUP_ROOT + "/Transfer");
+                    RootModulesHelp.modulesDir());
             activity.runOnUiThread(() -> {
                 if (activity.isFinishing() || activity.isDestroyed()) return;
                 if (err == null) {
@@ -82,7 +82,7 @@ public final class ModuleRestoreUi {
         try {
             var cfg = ConfigHelp.load();
             cfg.put("root_tar_seen", RootModulesHelp.newestTarStamp(
-                    ConfigHelp.BACKUP_ROOT + "/Transfer"));
+                    RootModulesHelp.modulesDir()));
             ConfigHelp.save(cfg);
         } catch (Exception e) {
             LogHelp.w("XpMiBackup", "mark tar seen failed: " + e.getMessage());

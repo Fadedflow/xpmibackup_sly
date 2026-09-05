@@ -236,7 +236,7 @@ public class BackupFragment extends Fragment {
                 }
             }
             var err = com.suileyan.comm.RootModulesHelp.createTarViaSu(
-                    ConfigHelp.BACKUP_ROOT + "/Transfer", managers);
+                    com.suileyan.comm.RootModulesHelp.modulesDir(), managers);
             var activity = getActivity();
             if (activity == null) return;
             activity.runOnUiThread(() -> {

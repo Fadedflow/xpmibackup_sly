@@ -130,6 +130,12 @@ public final class RootModulesHelp {
     /** 恢复前快照文件前缀（自动保留最近 1 份，供回滚） */
     public static final String PRE_RESTORE_PREFIX = "pre_restore_";
 
+    /** 模块快照专用目录：独立于 Transfer/（引擎备份/恢复流程会清理该目录，
+     *  真机实测快照被误删），RootModules/ 引擎不感知，只有我们读写。 */
+    public static String modulesDir() {
+        return com.suileyan.comm.ConfigHelp.BACKUP_ROOT + "/RootModules";
+    }
+
     /** 解包白名单：tar 条目必须落在这些前缀内（防路径穿越/写任意位置） */
     public static final String[] RESTORE_ALLOW_PREFIXES = {
             "data/adb/modules", "data/adb/modules_update", "data/adb/ksu", "data/adb/ap"

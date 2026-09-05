@@ -106,7 +106,7 @@ public class RootModulesHook {
                         if (param.thisObject.getClass().getName().contains("Restore")) return;
                         var result = (java.util.ArrayList) param.getResult();
                         int n = result == null ? -1 : result.size();
-                        var tar = RootModulesHelp.newestTar(ConfigHelp.BACKUP_ROOT + "/Transfer");
+                        var tar = com.suileyan.comm.RootModulesHelp.newestTar(com.suileyan.comm.RootModulesHelp.modulesDir());
                         // 诊断：无条件打印收集规模与我们的组状态（q/b/k）
                         StringBuilder diag = new StringBuilder("H: size=").append(n);
                         try {
@@ -245,7 +245,7 @@ public class RootModulesHook {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
                     try {
-                        if (RootModulesHelp.newestTar(ConfigHelp.BACKUP_ROOT + "/Transfer") == null) return;
+                        if (com.suileyan.comm.RootModulesHelp.newestTar(com.suileyan.comm.RootModulesHelp.modulesDir()) == null) return;
                         var btn = findButtonField(param.thisObject);
                         if (btn != null && !btn.isEnabled()) {
                             btn.setEnabled(true);
@@ -338,7 +338,7 @@ public class RootModulesHook {
     /** 标题：管理器标记文件 → 「SukiSU 模块备份」式；缺标记回退「Root 模块」 */
     private String resolveTitle() {
         try {
-            var manager = RootModulesHelp.readManagerName(ConfigHelp.BACKUP_ROOT + "/Transfer");
+            var manager = com.suileyan.comm.RootModulesHelp.readManagerName(com.suileyan.comm.RootModulesHelp.modulesDir());
             if (manager != null && !manager.isEmpty()) {
                 return manager + (isZh() ? " 模块备份" : " modules backup");
             }
@@ -377,7 +377,7 @@ public class RootModulesHook {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
                     try {
-                        var tar = RootModulesHelp.newestTar(ConfigHelp.BACKUP_ROOT + "/Transfer");
+                        var tar = com.suileyan.comm.RootModulesHelp.newestTar(com.suileyan.comm.RootModulesHelp.modulesDir());
                         if (tar == null) return;
                         var items = (java.util.ArrayList) XposedHelpers.getObjectField(
                                 param.thisObject, "m");
@@ -573,7 +573,7 @@ public class RootModulesHook {
             protected void beforeHookedMethod(MethodHookParam param) {
                 try {
                     if (!FEATURE_KEY.equals(param.args[0])) return;
-                    var tar = RootModulesHelp.newestTar(ConfigHelp.BACKUP_ROOT + "/Transfer");
+                    var tar = com.suileyan.comm.RootModulesHelp.newestTar(com.suileyan.comm.RootModulesHelp.modulesDir());
                     param.setResult(tar != null ? tar.length() : 0L);
                 } catch (Throwable e) {
                     LogHelp.w(TAG, "RootModulesHook: 预估大小拦截失败 " + e.getMessage());
@@ -740,7 +740,7 @@ public class RootModulesHook {
         if (!hostResResolved || !titleHookOk) return;
         if (!"on".equals(ConfigHelp.getString("root_modules_backup", "on"))) return;
 
-        var tar = RootModulesHelp.newestTar(ConfigHelp.BACKUP_ROOT + "/Transfer");
+        var tar = com.suileyan.comm.RootModulesHelp.newestTar(com.suileyan.comm.RootModulesHelp.modulesDir());
         if (tar == null) {
             LogHelp.i(TAG, "RootModulesHook: 无 root_modules_*.tar，跳过注入");
             return;
@@ -824,7 +824,7 @@ public class RootModulesHook {
             var res = moduleResources(ctx);
             var id = res.getIdentifier("root_modules_title", "string", MODULE_PACKAGE);
             var fallback = id != 0 ? res.getString(id) : (isZh() ? "Root 模块" : "Root modules");
-            var name = RootModulesHelp.readManagerName(ConfigHelp.BACKUP_ROOT + "/Transfer");
+            var name = com.suileyan.comm.RootModulesHelp.readManagerName(com.suileyan.comm.RootModulesHelp.modulesDir());
             if (name != null) {
                 return isZh() ? name + " 模块备份" : name + " modules";
             }
@@ -838,7 +838,7 @@ public class RootModulesHook {
     /** 条目图标：优先当前 Root 管理器的应用图标（标记文件携带包名），回退模块内置图标 */
     private android.graphics.drawable.Drawable entryIcon(android.content.Context ctx) {
         try {
-            var pkg = RootModulesHelp.readManagerPackage(ConfigHelp.BACKUP_ROOT + "/Transfer");
+            var pkg = com.suileyan.comm.RootModulesHelp.readManagerPackage(com.suileyan.comm.RootModulesHelp.modulesDir());
             if (pkg != null && !pkg.isEmpty()) {
                 var d = ctx.getPackageManager().getApplicationIcon(pkg);
                 if (d != null) return d;
