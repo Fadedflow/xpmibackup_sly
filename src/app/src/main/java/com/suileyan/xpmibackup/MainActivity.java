@@ -189,7 +189,7 @@ public class MainActivity extends Activity {
     private void maybePromptModuleRestore() {
         if (!"true".equals(com.suileyan.comm.ConfigHelp.getString("disclaimer_agreed", ""))) return;
         com.suileyan.comm.Async.run("tar-seen-check", () -> {
-            var transfer = com.suileyan.comm.ConfigHelp.BACKUP_ROOT + "/Transfer";
+            var transfer = com.suileyan.comm.RootModulesHelp.modulesDir();
             var stamp = com.suileyan.comm.RootModulesHelp.newestTarStamp(transfer);
             if (stamp.isEmpty()
                     || stamp.equals(com.suileyan.comm.ConfigHelp.getString("root_tar_seen", ""))) {
