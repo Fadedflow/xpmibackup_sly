@@ -683,7 +683,7 @@ public class RootModulesHook {
                         var icon = (ImageView) holderObj.findViewById(hostIconViewId(ctx));
                         var d = entryIcon(ctx);
                         if (icon != null && d != null) {
-                            icon.setImageDrawable(d);
+                            cancelGlideAndSet(icon, d, ctx);
                         }
                     } catch (Throwable e) {
                         LogHelp.w(TAG, "RootModulesHook: 组标题覆写失败 " + e.getMessage());
@@ -835,6 +835,22 @@ public class RootModulesHook {
     }
 
     /** 模块 APK 内的条目图标（VectorDrawable），失败返回 null（保留 Glide 兜底图标） */
+
+    /** 取消 Glide 对该 ImageView 的挂起异步请求并设置图标。
+     *  引擎渲染用 Glide 异步加载组图标，我们的同步 setImageDrawable 会被稍后到达的
+     *  Glide 结果覆盖（真机实测"图标时有时无"）；clear 后再设置即确定性生效。 */
+    private void cancelGlideAndSet(ImageView iv, android.graphics.drawable.Drawable d,
+                                   android.content.Context ctx) {
+        try {
+            var glide = XposedHelpers.findClass("com.bumptech.glide.Glide", ctx.getClassLoader());
+            var requestManager = XposedHelpers.callStaticMethod(glide, "with", (Object) iv);
+            XposedHelpers.callMethod(requestManager, "clear", iv);
+        } catch (Throwable e) {
+            LogHelp.w(TAG, "Glide clear 失败（回退直接设置）" + e.getMessage());
+        }
+        iv.setImageDrawable(d);
+    }
+
     /** 条目图标：优先当前 Root 管理器的应用图标（标记文件携带包名），回退模块内置图标 */
     private android.graphics.drawable.Drawable entryIcon(android.content.Context ctx) {
         try {
