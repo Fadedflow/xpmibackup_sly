@@ -90,7 +90,7 @@ public class RootModulesT {
         check("探测命令含全部候选 + 静默缺失", probe.startsWith("ls -d /data/adb/modules") && probe.endsWith("2>/dev/null"), probe);
         var tarCmd = RootModulesHelp.buildTarCommand("/sdcard/x/root_modules_1.tar",
                 List.of("/data/adb/modules", "/data/adb/ksu"));
-        check("打包命令拼接", tarCmd.equals("tar -cf /sdcard/x/root_modules_1.tar /data/adb/modules /data/adb/ksu"), tarCmd);
+        check("打包命令拼接", tarCmd.startsWith("tar -cf /sdcard/x/root_modules_1.tar /data/adb/modules /data/adb/ksu") && tarCmd.contains("chmod 644"), tarCmd);
 
         // 7) su 在桌面不存在 → createTarViaSu 优雅降级返回错误（不抛异常）
         var err = RootModulesHelp.createTarViaSu(dir.getPath(), List.of());
@@ -122,11 +122,48 @@ public class RootModulesT {
         check("标题 en", RootModulesHelp.buildTitle("APatch", false).equals("APatch modules"));
 
         // 11) 管理器标记文件写入/回读
-        RootModulesHelp.writeManagerMarker(dir.getPath(), "SukiSU");
+        RootModulesHelp.writeManagerMarker(dir.getPath(), "SukiSU", "com.sukisu.ultra");
         check("管理器标记回读", "SukiSU".equals(RootModulesHelp.readManagerName(dir.getPath())));
+        check("管理器包名回读", "com.sukisu.ultra".equals(RootModulesHelp.readManagerPackage(dir.getPath())));
         check("标记缺失返回 null", RootModulesHelp.readManagerName(dir.getPath() + "/nope") == null);
 
         System.out.println();
+        // ---------- 二期：恢复逻辑 ----------
+        // 9) 条目白名单校验
+        var ok = RootModulesHelp.validateEntries(java.util.List.of(
+                "/data/adb/modules/x/module.prop", "data/adb/ksu/bin",
+                "/data/adb/ap/", "/data/adb/modules_update/y"));
+        check("白名单条目全部放行", ok == null, String.valueOf(ok));
+        var bad1 = RootModulesHelp.validateEntries(java.util.List.of(
+                "/data/adb/modules/a", "/data/adb/../home/x"));
+        check("拒绝 .. 穿越路径", bad1 != null && bad1.contains(".."), String.valueOf(bad1));
+        var bad2 = RootModulesHelp.validateEntries(java.util.List.of("/system/app/x"));
+        check("拒绝白名单外路径", bad2 != null && bad2.contains("/system"), String.valueOf(bad2));
+        var bad3 = RootModulesHelp.validateEntries(java.util.List.of("etc/passwd"));
+        check("拒绝相对路径", bad3 != null, String.valueOf(bad3));
+        var okEmpty = RootModulesHelp.validateEntries(java.util.List.of("", "  "));
+        check("空条目跳过", okEmpty == null, String.valueOf(okEmpty));
+
+        // 10) 命令构造
+        var listCmd = RootModulesHelp.buildListCommand("/x/s.tar");
+        check("list 命令含 tar -tf", listCmd.equals("tar -tf /x/s.tar"), listCmd);
+        var extractCmd = RootModulesHelp.buildExtractCommand("/x/s.tar");
+        check("extract 命令含 -C /", extractCmd.equals("tar -xf /x/s.tar -C /"), extractCmd);
+        var rcCmd = RootModulesHelp.buildRestoreconCommand();
+        check("restorecon 覆盖四个目录", rcCmd.contains("modules_update") && rcCmd.contains("/data/adb/ap"), rcCmd);
+
+        // 11) 快照清理只清 pre_restore_ 前缀
+        var snap1 = new java.io.File(dir, "pre_restore_1.tar");
+        var snap2 = new java.io.File(dir, "pre_restore_2.tar");
+        var keepTar = new java.io.File(dir, "root_modules_keep.tar");
+        Files.write(snap1.toPath(), new byte[]{1});
+        Files.write(snap2.toPath(), new byte[]{1});
+        Files.write(keepTar.toPath(), new byte[]{1});
+        var removedSnaps = RootModulesHelp.pruneSnapshots(dir.toString(), 1);
+        check("快照清理保留 1 份", removedSnaps == 1, "removed=" + removedSnaps);
+        check("业务 tar 不被快照清理误删", keepTar.exists());
+        check("最新快照保留", snap2.exists() && !snap1.exists());
+
         System.out.println("通过 " + passed + " / 失败 " + failed);
         System.exit(failed == 0 ? 0 : 1);
     }

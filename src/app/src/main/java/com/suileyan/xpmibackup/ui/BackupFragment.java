@@ -77,6 +77,10 @@ public class BackupFragment extends Fragment {
         btnStartBackup.setOnClickListener(v -> startBackup());
         btnPcBackup.setOnClickListener(v -> showPcBackupDialog());
 
+        // 恢复 Root 模块：从 Transfer 快照解包回 /data/adb（二期，独立确认 UI）
+        Button btnRestoreModules = view.findViewById(R.id.btn_restore_modules);
+        btnRestoreModules.setOnClickListener(v -> showRestoreModulesDialog());
+
         // Root 模块备份开关（Magisk/KernelSU/APatch，随备份打包到云端/电脑）
         cbRootModules = view.findViewById(R.id.cb_root_modules);
         cbRootModules.setChecked("on".equals(ConfigHelp.getString("root_modules_backup", "on")));
@@ -299,6 +303,79 @@ public class BackupFragment extends Fragment {
      * → 保存为「电脑备份」方案（同名复用，密码入 EncryptedCredStore）→ 设为激活。
      * 之后「开始备份」走既有 NAS 流程跳转智能存储页。
      */
+    /** 恢复 Root 模块：选择快照 → 二次确认 → su 解包回 /data/adb */
+    private void showRestoreModulesDialog() {
+        var ctx = getActivity();
+        if (ctx == null) return;
+        if (!"on".equals(ConfigHelp.getString("root_modules_backup", "on"))) {
+            Toast.makeText(getActivity(), R.string.root_modules_backup, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Toast.makeText(getActivity(), R.string.root_modules_packing, Toast.LENGTH_SHORT).show();
+        com.suileyan.comm.Async.run("restore-list", () -> {
+            var tars = com.suileyan.comm.RootModulesHelp.listTars(
+                    ConfigHelp.BACKUP_ROOT + "/Transfer");
+            var activity = getActivity();
+            if (activity == null) return;
+            activity.runOnUiThread(() -> {
+                if (!isAdded()) return;
+                if (tars.isEmpty()) {
+                    Toast.makeText(getActivity(), R.string.restore_modules_none,
+                            Toast.LENGTH_LONG).show();
+                    return;
+                }
+                var names = new String[tars.size()];
+                for (var i = 0; i < tars.size(); i++) {
+                    var t = tars.get(i);
+                    names[i] = t.getName() + "（"
+                            + android.text.format.Formatter.formatShortFileSize(ctx, t.length())
+                            + "）";
+                }
+                var selected = new int[]{0};
+                new AlertDialog.Builder(ctx)
+                        .setTitle(R.string.restore_modules_title)
+                        .setSingleChoiceItems(names, 0, (d, w) -> selected[0] = w)
+                        .setPositiveButton(R.string.restore_modules_next, (d, w) ->
+                                confirmRestoreModules(tars.get(selected[0])))
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show();
+            });
+        });
+    }
+
+    /** 二次确认：覆盖警告 + 快照说明 + 重启提示 */
+    private void confirmRestoreModules(java.io.File tar) {
+        var ctx = getActivity();
+        if (ctx == null) return;
+        new AlertDialog.Builder(ctx)
+                .setTitle(R.string.restore_modules_title)
+                .setMessage(getString(R.string.restore_modules_confirm, tar.getName()))
+                .setPositiveButton(android.R.string.ok, (d, w) -> doRestoreModules(tar))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void doRestoreModules(java.io.File tar) {
+        Toast.makeText(getActivity(), R.string.root_modules_packing, Toast.LENGTH_SHORT).show();
+        com.suileyan.comm.Async.run("restore-modules", () -> {
+            var err = com.suileyan.comm.RootModulesHelp.restoreViaSu(tar.getAbsolutePath(),
+                    ConfigHelp.BACKUP_ROOT + "/Transfer");
+            var activity = getActivity();
+            if (activity == null) return;
+            activity.runOnUiThread(() -> {
+                if (!isAdded()) return;
+                if (err == null) {
+                    Toast.makeText(getActivity(), R.string.restore_modules_done,
+                            Toast.LENGTH_LONG).show();
+                } else {
+                    Toast.makeText(getActivity(),
+                            getString(R.string.restore_modules_fail) + err,
+                            Toast.LENGTH_LONG).show();
+                }
+            });
+        });
+    }
+
     private void showPcBackupDialog() {
         var ctx = getActivity();
         if (ctx == null) return;

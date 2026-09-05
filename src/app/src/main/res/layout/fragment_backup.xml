@@ -176,6 +176,17 @@
             android:background="@drawable/bg_button_secondary"
             android:textSize="15sp" />
 
+        <!-- 恢复 Root 模块：从快照解包回 /data/adb（二期，独立确认 UI） -->
+        <Button
+            android:id="@+id/btn_restore_modules"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/restore_modules_btn"
+            android:textColor="@color/text_primary"
+            android:background="@drawable/bg_button_secondary"
+            android:textSize="15sp" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

@@ -223,4 +223,11 @@
     <string name="root_modules_packing">Packing Root modules...</string>
     <string name="root_modules_pack_fail">Failed to pack Root modules, this backup will not include them:</string>
     <string name="root_modules_title">Root modules</string>
+    <string name="restore_modules_btn">Restore Root modules</string>
+    <string name="restore_modules_title">Restore Root modules</string>
+    <string name="restore_modules_none">No module snapshot found. Run a backup including Root modules first.</string>
+    <string name="restore_modules_next">Next</string>
+    <string name="restore_modules_confirm">Extract snapshot %s to /data/adb://n//n· Files with the same name will be overwritten\n· Installed modules not in the snapshot are kept\n· Current state is auto-snapshotted (rollback possible)\n· Reboot required after restore\n\nContinue?</string>
+    <string name="restore_modules_done">Restore complete. Reboot to take effect</string>
+    <string name="restore_modules_fail">Restore failed: </string>
 </resources>

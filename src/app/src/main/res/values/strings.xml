@@ -223,4 +223,11 @@
     <string name="root_modules_packing">正在打包 Root 模块…</string>
     <string name="root_modules_pack_fail">Root 模块打包失败，本次备份将不含模块：</string>
     <string name="root_modules_title">Root 模块</string>
+    <string name="restore_modules_btn">恢复 Root 模块</string>
+    <string name="restore_modules_title">恢复 Root 模块</string>
+    <string name="restore_modules_none">未找到可恢复的模块快照，请先完成一次包含 Root 模块的备份</string>
+    <string name="restore_modules_next">下一步</string>
+    <string name="restore_modules_confirm">将把快照 %s 解包到 /data/adb：\n\n· 同名文件将被覆盖\n· 备份里没有的已装模块会保留\n· 当前状态已自动快照（可回滚）\n· 恢复后需重启手机生效\n\n确认继续？</string>
+    <string name="restore_modules_done">恢复完成，重启手机后生效</string>
+    <string name="restore_modules_fail">恢复失败：</string>
 </resources>

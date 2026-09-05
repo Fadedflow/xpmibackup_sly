@@ -125,6 +125,149 @@ public final class RootModulesHelp {
         return f.isFile() && name.startsWith(TAR_PREFIX) && name.endsWith(TAR_SUFFIX);
     }
 
+    // ---------- 二期：恢复（快照解包回 /data/adb） ----------
+
+    /** 恢复前快照文件前缀（自动保留最近 1 份，供回滚） */
+    public static final String PRE_RESTORE_PREFIX = "pre_restore_";
+
+    /** 解包白名单：tar 条目必须落在这些前缀内（防路径穿越/写任意位置） */
+    public static final String[] RESTORE_ALLOW_PREFIXES = {
+            "data/adb/modules", "data/adb/modules_update", "data/adb/ksu", "data/adb/ap"
+    };
+
+    /** Transfer 目录下的全部快照，按时间倒序（最新在前） */
+    public static List<File> listTars(String transferDir) {
+        var dir = new File(transferDir);
+        var files = dir.listFiles();
+        List<File> tars = new ArrayList<>();
+        if (files != null) {
+            for (var f : files) {
+                if (isTar(f)) tars.add(f);
+            }
+        }
+        tars.sort((a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+        return tars;
+    }
+
+    /** 条目白名单校验：全部合法返回 null；否则返回首个非法条目。
+     *  规则（按 toybox tar 语义）：条目统一剥掉前导 / 后必须落在 data/adb 白名单内；
+     *  拒绝 ".."、相对路径、空条目以外的任何越界路径。 */
+    public static String validateEntries(List<String> entries) {
+        for (var raw : entries) {
+            if (raw == null) continue;
+            var e = raw.trim();
+            if (e.isEmpty()) continue;
+            if (e.startsWith("/")) e = e.substring(1);
+            if (e.contains("..")) return raw;
+            boolean ok = false;
+            for (var prefix : RESTORE_ALLOW_PREFIXES) {
+                if (e.equals(prefix) || e.startsWith(prefix + "/")) {
+                    ok = true;
+                    break;
+                }
+            }
+            if (!ok) return raw;
+        }
+        return null;
+    }
+
+    public static String buildListCommand(String tarPath) {
+        return "tar -tf " + tarPath;
+    }
+
+    public static String buildExtractCommand(String tarPath) {
+        return "tar -xf " + tarPath + " -C /";
+    }
+
+    /** 恢复后修正 SELinux 上下文（toybox restorecon；不存在时由调用方忽略失败） */
+    public static String buildRestoreconCommand() {
+        return "restorecon -R /data/adb/modules /data/adb/modules_update"
+                + " /data/adb/ksu /data/adb/ap";
+    }
+
+    /** 恢复前快照保留数量 */
+    public static int pruneSnapshots(String transferDir, int keep) {
+        var dir = new File(transferDir);
+        var files = dir.listFiles();
+        if (files == null) return 0;
+        List<File> snaps = new ArrayList<>();
+        for (var f : files) {
+            var name = f.getName();
+            if (f.isFile() && name.startsWith(PRE_RESTORE_PREFIX) && name.endsWith(TAR_SUFFIX)) {
+                snaps.add(f);
+            }
+        }
+        snaps.sort((a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+        var removed = 0;
+        for (var i = keep; i < snaps.size(); i++) {
+            if (snaps.get(i).delete()) removed++;
+        }
+        return removed;
+    }
+
+    /**
+     * 恢复流程（模块 App 内执行，需已授予 su）：
+     * 校验快照条目白名单 → 快照当前 /data/adb 状态（回滚点）→ 解包 → restorecon。
+     *
+     * @param tarAbsolutePath 待恢复的快照（须位于 transferDir 内）
+     * @return null=成功；否则失败原因（可直接 Toast）
+     */
+    public static String restoreViaSu(String tarAbsolutePath, String transferDir) {
+        if (tarAbsolutePath == null
+                || !new File(tarAbsolutePath).getPath().startsWith(new File(transferDir).getPath())) {
+            return "非法快照路径";
+        }
+        // 1) 列出条目并校验白名单（防路径穿越）
+        var list = runSu(buildListCommand(tarAbsolutePath), TAR_TIMEOUT_MS);
+        if (list.output == null || list.output.isEmpty()) {
+            LogHelp.w(TAG, "restore: 条目读取失败 " + list.error);
+            return "无法读取快照内容: " + (list.error != null ? list.error : "空");
+        }
+        List<String> entries = new ArrayList<>();
+        for (var line : list.output.split("\n")) {
+            if (!line.trim().isEmpty()) entries.add(line.trim());
+        }
+        if (entries.isEmpty()) {
+            return "快照为空";
+        }
+        var invalid = validateEntries(entries);
+        if (invalid != null) {
+            LogHelp.w(TAG, "restore: 非法条目 " + invalid);
+            return "快照包含不允许的路径: " + invalid;
+        }
+        // 2) 快照当前 /data/adb 状态（回滚点；keep=1）
+        var probe = runSu(buildProbeCommand(), PROBE_TIMEOUT_MS);
+        List<String> existing = new ArrayList<>();
+        if (probe.output != null) {
+            for (var line : probe.output.split("\n")) {
+                var p = line.trim();
+                if (p.startsWith("/data/adb/")) existing.add(p);
+            }
+        }
+        if (!existing.isEmpty()) {
+            var snap = new File(transferDir, PRE_RESTORE_PREFIX + timeStamp() + TAR_SUFFIX);
+            var snapRun = runSu(buildTarCommand(snap.getAbsolutePath(), existing), TAR_TIMEOUT_MS);
+            if (snapRun.error != null) {
+                LogHelp.w(TAG, "restore: 当前状态快照失败（继续恢复）" + snapRun.error);
+            } else {
+                pruneSnapshots(transferDir, 1);
+                LogHelp.i(TAG, "restore: 当前状态已快照 " + snap.getName());
+            }
+        }
+        // 3) 解包（tar 内为 /data/adb 绝对路径，-C / 落位）
+        var ex = runSu(buildExtractCommand(tarAbsolutePath), TAR_TIMEOUT_MS);
+        if (ex.error != null) {
+            LogHelp.w(TAG, "restore: 解包失败 " + ex.error);
+            return "解包失败: " + ex.error;
+        }
+        // 4) restorecon 修正上下文（best-effort）
+        runSu(buildRestoreconCommand(), PROBE_TIMEOUT_MS);
+        LogHelp.i(TAG, "restore: 完成 tar=" + new File(tarAbsolutePath).getName()
+                + " entries=" + entries.size());
+        return null;
+    }
+
+
     /**
      * 探测命令：列出实际存在的源目录（无 root 无法 stat /data/adb，只能在 su shell 里判）。
      * 输出每行一个存在的路径。
