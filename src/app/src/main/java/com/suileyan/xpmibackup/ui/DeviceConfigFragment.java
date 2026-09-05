@@ -77,7 +77,7 @@ public class DeviceConfigFragment extends Fragment {
         etSettingsSummary.setText(cfg.optString("device_describe", ""));
         etBackupPath.setText(cfg.optString("backup_path", ""));
         etMaxBackups.setText(cfg.optString("backup_max", "5"));
-        swLogEnabled.setChecked("true".equalsIgnoreCase(cfg.optString("log_enabled", "false")));
+        swLogEnabled.setChecked(!cfg.has("log_enabled") || "true".equalsIgnoreCase(cfg.optString("log_enabled", "true")));
     }
 
     /**

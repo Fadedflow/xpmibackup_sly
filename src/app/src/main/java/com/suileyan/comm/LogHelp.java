@@ -204,7 +204,8 @@ public class LogHelp {
         if (ts == sLogEnabledTs) {
             return sLogEnabledCached;
         }
-        var enabled = false;
+        // 默认开启（v0.9.1）：错误/流程日志默认落盘便于排查；config.ini 显式 log_enabled=false 才关闭
+        var enabled = true;
         if (file.exists()) {
             try (var reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
                 var line = reader.readLine();

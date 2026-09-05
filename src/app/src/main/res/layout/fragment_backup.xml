@@ -135,6 +135,27 @@
             </LinearLayout>
         </LinearLayout>
 
+        <!-- Root 模块备份：打包 Magisk/KernelSU/APatch 模块目录并入本次备份 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="@drawable/bg_card"
+            android:padding="14dp"
+            android:layout_marginBottom="16dp"
+            android:gravity="center_vertical">
+
+            <CheckBox
+                android:id="@+id/cb_root_modules"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:checked="true"
+                android:text="@string/root_modules_backup"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp" />
+        </LinearLayout>
+
         <Button
             android:id="@+id/btn_start_backup"
             android:layout_width="match_parent"
@@ -143,5 +164,25 @@
             android:textColor="@color/primary_text_on"
             android:background="@drawable/bg_button_primary"
             android:textSize="15sp" />
+
+        <!-- 备份到电脑：mibackpc（WebDAV 接收器）快速配置入口 -->
+        <Button
+            android:id="@+id/btn_pc_backup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/pc_backup"
+            android:textColor="@color/text_primary"
+            android:background="@drawable/bg_button_secondary"
+            android:textSize="15sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/pc_backup_hint"
+            android:textSize="12sp"
+            android:textColor="@color/text_hint"
+            android:layout_marginTop="6dp"
+            android:layout_marginStart="8dp" />
     </LinearLayout>
 </ScrollView>

@@ -32,6 +32,7 @@ public class XposedEntry implements IXposedHookLoadPackage {
             new BackupHook().hook(lpparam);
             new AutoBackupHook().hook(lpparam);
             new AIDLHook().hook(lpparam);
+            new com.suileyan.xpmibackup.hook.RootModulesHook().hook(lpparam);
             // 清理临时目录放到后台守护线程池，避免文件 IO 阻塞目标进程主线程（MED-20 / NEW-H-01）
             com.suileyan.comm.Async.run("cleanup-temp", () -> cleanupTempDirs());
         }
