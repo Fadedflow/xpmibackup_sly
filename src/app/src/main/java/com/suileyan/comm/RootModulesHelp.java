@@ -149,6 +149,22 @@ public final class RootModulesHelp {
         return tars;
     }
 
+    /** 最新快照的"指纹"（名字+mtime）：用于检测原生恢复是否把 tar 还原回设备。
+     *  目录为空返回空串。 */
+    public static String newestTarStamp(String transferDir) {
+        var tars = listTars(transferDir);
+        if (tars.isEmpty()) return "";
+        var t = tars.get(0);
+        return t.getName() + ":" + t.lastModified();
+    }
+
+    /** Root 可用性检测：su -c id 输出含 uid=0。
+     *  首次执行会触发管理器授权弹窗，超时给足 10s 等用户点授权。 */
+    public static boolean hasSu() {
+        var r = runSu("id", 10_000L);
+        return r.error == null && r.output != null && r.output.contains("uid=0");
+    }
+
     /** 条目白名单校验：全部合法返回 null；否则返回首个非法条目。
      *  规则（按 toybox tar 语义）：条目统一剥掉前导 / 后必须落在 data/adb 白名单内；
      *  拒绝 ".."、相对路径、空条目以外的任何越界路径。 */

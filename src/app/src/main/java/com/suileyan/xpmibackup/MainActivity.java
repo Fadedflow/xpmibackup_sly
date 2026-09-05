@@ -1,6 +1,8 @@
 package com.suileyan.xpmibackup;
 
 import android.app.Activity;
+
+import com.suileyan.xpmibackup.ui.ModuleRestoreUi;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.net.Uri;
@@ -138,6 +140,76 @@ public class MainActivity extends Activity {
         com.suileyan.cloud.EncryptedCredStore.warmUp();
         // 仅应用进入时自动检测一次版本（设置页可关闭，弹小窗可点空白取消）
         checkUpdatesOnLaunch();
+        // 首次启动免责声明（3 秒倒计时后才能点同意）
+        maybeShowDisclaimer();
+    }
+
+    /** 首次启动免责声明：不可取消，同意按钮 3 秒倒计时后可点 */
+    private void maybeShowDisclaimer() {
+        if ("true".equals(com.suileyan.comm.ConfigHelp.getString("disclaimer_agreed", ""))) return;
+        var dialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.disclaimer_title)
+                .setMessage(R.string.disclaimer_text)
+                .setCancelable(false)
+                .setPositiveButton(R.string.disclaimer_agree, null)
+                .setNegativeButton(R.string.disclaimer_exit, (d, w) -> finishAffinity())
+                .create();
+        dialog.show();
+        var btn = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        btn.setEnabled(false);
+        var remain = new int[]{3};
+        var handler = new android.os.Handler(android.os.Looper.getMainLooper());
+        Runnable tick = new Runnable() {
+            @Override
+            public void run() {
+                if (remain[0] > 0) {
+                    btn.setText(getString(R.string.disclaimer_agree_countdown, remain[0]));
+                    remain[0]--;
+                    handler.postDelayed(this, 1000);
+                    return;
+                }
+                btn.setText(R.string.disclaimer_agree);
+                btn.setEnabled(true);
+                btn.setOnClickListener(v -> {
+                    try {
+                        var cfg = com.suileyan.comm.ConfigHelp.load();
+                        cfg.put("disclaimer_agreed", "true");
+                        com.suileyan.comm.ConfigHelp.save(cfg);
+                    } catch (Exception ignored) {
+                    }
+                    dialog.dismiss();
+                });
+            }
+        };
+        btn.setText(getString(R.string.disclaimer_agree_countdown, remain[0]));
+        handler.postDelayed(tick, 1000);
+    }
+
+    /** 检测原生恢复是否把模块快照还原回设备（快照指纹变化即提示），避免用户漏掉解包步骤 */
+    private void maybePromptModuleRestore() {
+        if (!"true".equals(com.suileyan.comm.ConfigHelp.getString("disclaimer_agreed", ""))) return;
+        com.suileyan.comm.Async.run("tar-seen-check", () -> {
+            var transfer = com.suileyan.comm.ConfigHelp.BACKUP_ROOT + "/Transfer";
+            var stamp = com.suileyan.comm.RootModulesHelp.newestTarStamp(transfer);
+            if (stamp.isEmpty()
+                    || stamp.equals(com.suileyan.comm.ConfigHelp.getString("root_tar_seen", ""))) {
+                return;
+            }
+            var tars = com.suileyan.comm.RootModulesHelp.listTars(transfer);
+            if (tars.isEmpty()) return;
+            var newest = tars.get(0);
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                ModuleRestoreUi.markSeen(this); // 先记录指纹，避免反复打扰
+                new AlertDialog.Builder(this)
+                        .setTitle(R.string.restore_prompt_title)
+                        .setMessage(getString(R.string.restore_prompt_msg, newest.getName()))
+                        .setPositiveButton(R.string.restore_modules_title,
+                                (d, w) -> ModuleRestoreUi.restore(this, newest))
+                        .setNegativeButton(R.string.restore_prompt_later, null)
+                        .show();
+            });
+        });
     }
 
     /**
@@ -620,6 +692,7 @@ public class MainActivity extends Activity {
             updateTabSelection(TAB_NAMES[0]);
             updateBackInvoke();
         }
+        maybePromptModuleRestore();
     }
 
     /** 根据Tab名更新四个底部Tab的选中高亮 */

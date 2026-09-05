@@ -230,4 +230,14 @@
     <string name="restore_modules_confirm">Extract snapshot %s to /data/adb://n//n· Files with the same name will be overwritten\n· Installed modules not in the snapshot are kept\n· Current state is auto-snapshotted (rollback possible)\n· Reboot required after restore\n\nContinue?</string>
     <string name="restore_modules_done">Restore complete. Reboot to take effect</string>
     <string name="restore_modules_fail">Restore failed: </string>
+    <string name="disclaimer_title">Disclaimer</string>
+    <string name="disclaimer_text">This is an Xposed/LSPosed module that requires Root to modify system backup behavior, for backing up and restoring personal data (including Root modules).\n\n· Use only on your own device\n· You are responsible for any data loss or device issues caused by using this app\n· Comply with local laws; do not use for illegal purposes</string>
+    <string name="disclaimer_agree">Agree and continue</string>
+    <string name="disclaimer_agree_countdown">Agree (%ds)</string>
+    <string name="disclaimer_exit">Exit</string>
+    <string name="su_checking">Checking Root access...</string>
+    <string name="su_missing">No working Root access found. Grant Root in your manager first, then retry.</string>
+    <string name="restore_prompt_title">Module snapshot detected</string>
+    <string name="restore_prompt_msg">A module snapshot (%s) has been restored to this device. Extract it to /data/adb now? A reboot is required afterwards.</string>
+    <string name="restore_prompt_later">Later</string>
 </resources>

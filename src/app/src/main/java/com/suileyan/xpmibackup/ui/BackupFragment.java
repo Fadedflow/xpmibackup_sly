@@ -85,13 +85,33 @@ public class BackupFragment extends Fragment {
         cbRootModules = view.findViewById(R.id.cb_root_modules);
         cbRootModules.setChecked("on".equals(ConfigHelp.getString("root_modules_backup", "on")));
         cbRootModules.setOnCheckedChangeListener((b, isChecked) -> {
-            try {
-                var cfg = ConfigHelp.load();
-                cfg.put("root_modules_backup", isChecked ? "on" : "off");
-                ConfigHelp.save(cfg);
-            } catch (Exception e) {
-                com.suileyan.comm.LogHelp.w("XpMiBackup", "save root modules toggle failed", e);
+            // 取消勾选：直接保存，无前置条件
+            if (!isChecked) {
+                saveRootModulesToggle(false);
+                return;
             }
+            // 勾选：先检测 Root 可用性（首次会弹管理器授权窗），无 Root 不勾选
+            b.setEnabled(false);
+            Toast.makeText(getActivity(), R.string.su_checking, Toast.LENGTH_SHORT).show();
+            com.suileyan.comm.Async.run("su-check", () -> {
+                var ok = com.suileyan.comm.RootModulesHelp.hasSu();
+                var activity = getActivity();
+                if (activity == null) return;
+                activity.runOnUiThread(() -> {
+                    if (!isAdded()) return;
+                    b.setEnabled(true);
+                    if (ok) {
+                        saveRootModulesToggle(true);
+                    } else {
+                        // 无 Root：回退勾选并提示
+                        b.setOnCheckedChangeListener(null);
+                        b.setChecked(false);
+                        b.setOnCheckedChangeListener((bb, c) -> cbRootModulesListener(bb, c));
+                        saveRootModulesToggle(false);
+                        Toast.makeText(getActivity(), R.string.su_missing, Toast.LENGTH_LONG).show();
+                    }
+                });
+            });
         });
         com.suileyan.comm.LogHelp.i("XpMiBackup", "STARTUP BackupFragment onCreateView: " + (System.currentTimeMillis() - t0) + "ms");
         return view;
@@ -225,6 +245,9 @@ public class BackupFragment extends Fragment {
                     Toast.makeText(getActivity(),
                             getString(R.string.root_modules_pack_fail) + "\n" + err,
                             Toast.LENGTH_LONG).show();
+                } else {
+                    // 应用内新建的快照更新指纹，避免 onResume 误判为"原生还原"而弹提示
+                    ModuleRestoreUi.markSeen(activity);
                 }
                 proceedStartBackup();
             });
@@ -303,77 +326,49 @@ public class BackupFragment extends Fragment {
      * → 保存为「电脑备份」方案（同名复用，密码入 EncryptedCredStore）→ 设为激活。
      * 之后「开始备份」走既有 NAS 流程跳转智能存储页。
      */
-    /** 恢复 Root 模块：选择快照 → 二次确认 → su 解包回 /data/adb */
-    private void showRestoreModulesDialog() {
-        var ctx = getActivity();
-        if (ctx == null) return;
-        if (!"on".equals(ConfigHelp.getString("root_modules_backup", "on"))) {
-            Toast.makeText(getActivity(), R.string.root_modules_backup, Toast.LENGTH_SHORT).show();
+    private void cbRootModulesListener(android.widget.CompoundButton b, boolean isChecked) {
+        // 供回退勾选时重挂监听使用（见勾选检测逻辑）
+        if (!isChecked) {
+            saveRootModulesToggle(false);
             return;
         }
-        Toast.makeText(getActivity(), R.string.root_modules_packing, Toast.LENGTH_SHORT).show();
-        com.suileyan.comm.Async.run("restore-list", () -> {
-            var tars = com.suileyan.comm.RootModulesHelp.listTars(
-                    ConfigHelp.BACKUP_ROOT + "/Transfer");
+        b.setEnabled(false);
+        Toast.makeText(getActivity(), R.string.su_checking, Toast.LENGTH_SHORT).show();
+        com.suileyan.comm.Async.run("su-check", () -> {
+            var ok = com.suileyan.comm.RootModulesHelp.hasSu();
             var activity = getActivity();
             if (activity == null) return;
             activity.runOnUiThread(() -> {
                 if (!isAdded()) return;
-                if (tars.isEmpty()) {
-                    Toast.makeText(getActivity(), R.string.restore_modules_none,
-                            Toast.LENGTH_LONG).show();
-                    return;
-                }
-                var names = new String[tars.size()];
-                for (var i = 0; i < tars.size(); i++) {
-                    var t = tars.get(i);
-                    names[i] = t.getName() + "（"
-                            + android.text.format.Formatter.formatShortFileSize(ctx, t.length())
-                            + "）";
-                }
-                var selected = new int[]{0};
-                new AlertDialog.Builder(ctx)
-                        .setTitle(R.string.restore_modules_title)
-                        .setSingleChoiceItems(names, 0, (d, w) -> selected[0] = w)
-                        .setPositiveButton(R.string.restore_modules_next, (d, w) ->
-                                confirmRestoreModules(tars.get(selected[0])))
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .show();
-            });
-        });
-    }
-
-    /** 二次确认：覆盖警告 + 快照说明 + 重启提示 */
-    private void confirmRestoreModules(java.io.File tar) {
-        var ctx = getActivity();
-        if (ctx == null) return;
-        new AlertDialog.Builder(ctx)
-                .setTitle(R.string.restore_modules_title)
-                .setMessage(getString(R.string.restore_modules_confirm, tar.getName()))
-                .setPositiveButton(android.R.string.ok, (d, w) -> doRestoreModules(tar))
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
-    }
-
-    private void doRestoreModules(java.io.File tar) {
-        Toast.makeText(getActivity(), R.string.root_modules_packing, Toast.LENGTH_SHORT).show();
-        com.suileyan.comm.Async.run("restore-modules", () -> {
-            var err = com.suileyan.comm.RootModulesHelp.restoreViaSu(tar.getAbsolutePath(),
-                    ConfigHelp.BACKUP_ROOT + "/Transfer");
-            var activity = getActivity();
-            if (activity == null) return;
-            activity.runOnUiThread(() -> {
-                if (!isAdded()) return;
-                if (err == null) {
-                    Toast.makeText(getActivity(), R.string.restore_modules_done,
-                            Toast.LENGTH_LONG).show();
+                b.setEnabled(true);
+                if (ok) {
+                    saveRootModulesToggle(true);
                 } else {
-                    Toast.makeText(getActivity(),
-                            getString(R.string.restore_modules_fail) + err,
-                            Toast.LENGTH_LONG).show();
+                    b.setOnCheckedChangeListener(null);
+                    b.setChecked(false);
+                    b.setOnCheckedChangeListener(this::cbRootModulesListener);
+                    saveRootModulesToggle(false);
+                    Toast.makeText(getActivity(), R.string.su_missing, Toast.LENGTH_LONG).show();
                 }
             });
         });
+    }
+
+    private void saveRootModulesToggle(boolean on) {
+        try {
+            var cfg = ConfigHelp.load();
+            cfg.put("root_modules_backup", on ? "on" : "off");
+            ConfigHelp.save(cfg);
+        } catch (Exception e) {
+            com.suileyan.comm.LogHelp.w("XpMiBackup", "save root modules toggle failed", e);
+        }
+    }
+
+    /** 恢复 Root 模块：选择快照 → 二次确认 → su 解包回 /data/adb */
+    private void showRestoreModulesDialog() {
+        var activity = getActivity();
+        if (activity == null) return;
+        ModuleRestoreUi.pickAndRestore(activity);
     }
 
     private void showPcBackupDialog() {
