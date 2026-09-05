@@ -608,18 +608,20 @@ public class Pan123Provider implements CloudProvider {
     /** 建目录：POST /b/api/file/upload_request（注意 /a/ 前缀，签名），返回新目录 FileId */
     private String createFolder(String parentId, String name) throws CloudException {
         try {
-            var body = new JSONObject();
-            body.put("driveId", 0);
-            body.put("etag", "");
-            body.put("fileName", name);
-            body.put("parentFileId", longOrString(parentId));
-            body.put("size", 0);
-            body.put("type", 1);
-            body.put("duplicate", 1);
-            body.put("NotReuse", true);
-            body.put("event", "newCreateFolder");
-            body.put("operateType", 1);
-            var resp = postSigned("/b/api/file/upload_request", true, body, null);
+            // 必须用 form 编码：api.123278.com 的 /b/api/file/upload_request 只解析 form，
+            // JSON body 会让后端挂起直至客户端 60s 读超时（真机实测反复 timeout）
+            var form = new LinkedHashMap<String, String>();
+            form.put("driveId", "0");
+            form.put("etag", "");
+            form.put("fileName", name);
+            form.put("parentFileId", parentId == null || parentId.isEmpty() ? ROOT_ID : parentId);
+            form.put("size", "0");
+            form.put("type", "1");
+            form.put("duplicate", "1");
+            form.put("NotReuse", "true");
+            form.put("event", "newCreateFolder");
+            form.put("operateType", "1");
+            var resp = postSigned("/b/api/file/upload_request", false, null, form);
             var json = requireOk(parse(resp, "createFolder"), "createFolder");
             var data = json.optJSONObject("data");
             var info = data != null ? data.optJSONObject("Info") : null;
