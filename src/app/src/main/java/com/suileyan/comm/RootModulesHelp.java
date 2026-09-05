@@ -286,6 +286,11 @@ public final class RootModulesHelp {
         runSu(buildRestoreconCommand(), PROBE_TIMEOUT_MS);
         LogHelp.i(TAG, "restore: 完成 tar=" + new File(tarAbsolutePath).getName()
                 + " entries=" + entries.size());
+        // 5) 成功后清理快照：解包完成后 tar 已无用处（回滚靠 pre_restore_*.tar，
+        //    备份集内还有一份在目标端），不留 129MB 垃圾
+        if (new File(tarAbsolutePath).delete()) {
+            LogHelp.i(TAG, "restore: 已清理已恢复的快照");
+        }
         return null;
     }
 
