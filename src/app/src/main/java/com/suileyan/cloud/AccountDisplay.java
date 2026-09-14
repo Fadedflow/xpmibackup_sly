@@ -79,6 +79,7 @@ public final class AccountDisplay {
         if (CloudAccount.PROVIDER_BAIDU.equals(provider)) return "百度网盘";
         if (CloudAccount.PROVIDER_WO.equals(provider)) return "联通沃盘";
         if (CloudAccount.PROVIDER_115.equals(provider)) return "115网盘";
+        if (CloudAccount.PROVIDER_ALIYUN.equals(provider)) return "阿里云盘";
         return provider == null ? "" : provider;
     }
 

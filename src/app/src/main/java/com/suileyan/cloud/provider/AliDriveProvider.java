@@ -1,0 +1,767 @@
+package com.suileyan.cloud.provider;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import com.suileyan.cloud.CloudAccount;
+import com.suileyan.cloud.CloudException;
+import com.suileyan.cloud.CloudProvider;
+import com.suileyan.cloud.EncryptedCredStore;
+import com.suileyan.cloud.LoginContext;
+import com.suileyan.cloud.LoginState;
+import com.suileyan.cloud.ProgressCallback;
+import com.suileyan.cloud.RemoteEntry;
+import com.suileyan.comm.LogHelp;
+import com.suileyan.comm.Secp256k1;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+
+/**
+ * 阿里云盘（alipan.com）Provider
+ *
+ * 协议参考 GitHub 在维护的第三方实现 AlistGo/alist drivers/aliyundrive（Web API + Android 客户端仿真）：
+ * - 认证：auth.alipan.com/v2/account/token 用 refresh_token 换新（轮换，access_token 约 2 小时）
+ * - 设备签名：user_id 派生 secp256k1 密钥，create_session 注册公钥，每请求带
+ *   X-Signature（SHA-256("secpAppID:deviceID:userID:0") 的签名）与 X-Device-Id、X-Canary
+ * - 上传：adrive/v2/file/createWithFolders（预签名 OSS 分片地址）→ PUT 分片 → v2/file/complete
+ * - 列表/下载/删除：v2/file/list（marker 翻页）、v2/file/get_download_url（下载需带 Referer）、
+ *   v2/recyclebin/trash（入回收站）
+ */
+public class AliDriveProvider implements CloudProvider {
+
+    private static final String TAG = "XpMiBackup";
+    public static final String TYPE = "aliyun";
+    private static final String API_BASE = "https://api.alipan.com";
+    private static final String AUTH_BASE = "https://auth.alipan.com";
+    private static final String ORIGIN = "https://www.alipan.com";
+    /** 阿里 Android 客户端签名的固定 secpAppID（与 alist 对齐） */
+    private static final String SECP_APP_ID = "5dde4e1bdf9e4966b387ba58f4b3fdc3";
+    /** 分片大小 10MB（对齐 alist；createWithFolders 预签名直传 OSS） */
+    private static final long PART_SIZE = 10L * 1024 * 1024;
+    private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+    private static final int BUFFER_SIZE = 64 * 1024;
+
+    private final CloudAccount account;
+    /** 身份派生缓存（Provider 实例内复用；跨实例经 EncryptedCredStore 持久化） */
+    private String userId;
+    private String signature;
+    private String deviceId;
+
+    public AliDriveProvider(CloudAccount account) {
+        this.account = account;
+    }
+
+    @Override
+    public String id() {
+        return account != null ? account.id : "";
+    }
+
+    @Override
+    public String type() {
+        return TYPE;
+    }
+
+    @Override
+    public String displayName() {
+        return account != null && account.name != null && !account.name.isEmpty() ? account.name : "阿里云盘";
+    }
+
+    @Override
+    public boolean isLoggedIn() {
+        return !EncryptedCredStore.get(id(), "refresh_token").isEmpty();
+    }
+
+    @Override
+    public LoginState login(LoginContext ctx) {
+        return LoginState.NOT_SUPPORTED;
+    }
+
+    // ========== 连接测试（user/get 拉身份：user_id/drive_id/nickname） ==========
+
+    @Override
+    public boolean testConnection() throws CloudException {
+        var user = request("/v2/user/get", new JSONObject());
+        var uid = user.optString("user_id", "");
+        if (uid.isEmpty()) {
+            throw new CloudException(CloudException.Kind.REMOTE, "阿里云盘 user/get 缺少 user_id");
+        }
+        var driveId = user.optString("default_drive_id", "");
+        if (driveId.isEmpty()) {
+            driveId = user.optString("resource_drive_id", "");
+        }
+        var nickname = user.optString("nickname", user.optString("user_name", ""));
+        EncryptedCredStore.put(id(), "user_id", uid);
+        if (!driveId.isEmpty()) EncryptedCredStore.put(id(), "drive_id", driveId);
+        if (!nickname.isEmpty()) EncryptedCredStore.put(id(), "nickname", nickname);
+        LogHelp.i(TAG, "阿里云盘连接成功 user=" + nickname + " drive=" + driveId);
+        return true;
+    }
+
+    // ========== 目录与列表 ==========
+
+    @Override
+    public List<String> listDirs() throws CloudException {
+        var out = new ArrayList<String>();
+        for (var e : listChildren("root")) {
+            if (e.isDir) out.add(e.name);
+        }
+        return out;
+    }
+
+    @Override
+    public List<RemoteEntry> listEntries(String remoteDir) throws CloudException {
+        var parentId = resolvePath(remoteDir, false);
+        if (parentId == null) return new ArrayList<>();
+        var out = new ArrayList<RemoteEntry>();
+        for (var e : listChildren(parentId)) {
+            out.add(new RemoteEntry(e.name, e.size, e.isDir, e.modifiedTime));
+        }
+        return out;
+    }
+
+    @Override
+    public void mkdirs(String remoteDir) throws CloudException {
+        resolvePath(remoteDir, true);
+    }
+
+    // ========== 上传 ==========
+
+    @Override
+    public String upload(String localPath, String remoteDir) throws CloudException {
+        uploadWithProgress(localPath, null, remoteDir, "");
+        return "OK: " + localPath;
+    }
+
+    @Override
+    public void uploadWithProgress(String localPath, ProgressCallback cb, String remoteDir, String taskId) throws CloudException {
+        var localFile = new File(localPath);
+        if (!localFile.exists()) {
+            throw new CloudException(CloudException.Kind.LOCAL, "file not found: " + localPath);
+        }
+        try {
+            var parentId = resolvePath(remoteDir, true);
+            if (cb != null) cb.onStart(taskId);
+            var size = localFile.length();
+            // 0 字节文件（备份完成标记 end）：对齐百度/沃盘/光鸭约定直接 mock 成功
+            if (size == 0) {
+                LogHelp.i(TAG, "阿里云盘跳过 0 字节文件: " + localFile.getName());
+                if (cb != null) cb.onFinish(taskId, 0, "success");
+                return;
+            }
+
+            // 1. create：预签名分片地址（10MB 分片，与 alist 对齐）
+            var partCount = (int) ((size + PART_SIZE - 1) / PART_SIZE);
+            var createBody = new JSONObject();
+            createBody.put("check_name_mode", "overwrite");
+            createBody.put("drive_id", driveId());
+            createBody.put("name", localFile.getName());
+            createBody.put("parent_file_id", parentId);
+            createBody.put("part_info_list", partNumbers(partCount));
+            createBody.put("size", size);
+            createBody.put("type", "file");
+            createBody.put("content_hash_name", "none");
+            createBody.put("proof_version", "v1");
+            var created = request("/adrive/v2/file/createWithFolders", createBody);
+            var fileId = created.optString("file_id", "");
+            var uploadId = created.optString("upload_id", "");
+            var parts = created.optJSONArray("part_info_list");
+            if (fileId.isEmpty() || parts == null || parts.length() == 0) {
+                throw new CloudException(CloudException.Kind.REMOTE,
+                        "阿里云盘 create 响应缺少分片信息: " + truncate(created.toString(), 300));
+            }
+            LogHelp.i(TAG, "阿里云盘 upload start name=" + localFile.getName()
+                    + " size=" + size + " parts=" + parts.length() + "/" + partCount);
+
+            // 2. 逐分片 PUT 到预签名 OSS 地址（无鉴权头，进度跨分片累计）
+            long written = 0;
+            for (var i = 0; i < parts.length(); i++) {
+                var part = parts.optJSONObject(i);
+                var uploadUrl = part != null ? part.optString("upload_url", "") : "";
+                if (uploadUrl.isEmpty()) {
+                    throw new CloudException(CloudException.Kind.REMOTE, "阿里云盘分片 " + (i + 1) + " 缺少 upload_url");
+                }
+                written += putPart(uploadUrl, localFile, i * PART_SIZE,
+                        Math.min(PART_SIZE, size - i * PART_SIZE), cb, taskId, size);
+            }
+
+            // 3. complete 提交
+            var completeBody = new JSONObject();
+            completeBody.put("drive_id", driveId());
+            completeBody.put("file_id", fileId);
+            completeBody.put("upload_id", uploadId);
+            var done = request("/v2/file/complete", completeBody);
+            if (done.optString("file_id", "").isEmpty()) {
+                throw new CloudException(CloudException.Kind.REMOTE,
+                        "阿里云盘 complete 响应异常: " + truncate(done.toString(), 300));
+            }
+            LogHelp.i(TAG, "阿里云盘 upload done name=" + localFile.getName() + " size=" + size);
+            if (cb != null) cb.onFinish(taskId, 0, "success");
+        } catch (CloudException e) {
+            if (cb != null) cb.onFinish(taskId, -1, e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            LogHelp.e(TAG, "阿里云盘上传失败", e);
+            if (cb != null) cb.onFinish(taskId, -1, e.getMessage());
+            throw new CloudException(CloudException.Kind.REMOTE, e);
+        }
+    }
+
+    private static JSONArray partNumbers(int count) throws org.json.JSONException {
+        var arr = new JSONArray();
+        for (var i = 1; i <= count; i++) {
+            arr.put(new JSONObject().put("part_number", i));
+        }
+        return arr;
+    }
+
+    /** 上传单个分片：从本地 offset 读 length 字节 PUT 到预签名地址 */
+    private long putPart(String uploadUrl, File localFile, long offset, long length,
+                         ProgressCallback cb, String taskId, long totalSize) throws Exception {
+        var request = new Request.Builder().url(uploadUrl).put(new RequestBody() {
+            @Override
+            public MediaType contentType() {
+                return MediaType.parse("application/octet-stream");
+            }
+
+            @Override
+            public long contentLength() {
+                return length;
+            }
+
+            @Override
+            public void writeTo(okio.BufferedSink sink) throws IOException {
+                var buffer = new byte[BUFFER_SIZE];
+                var done = 0L;
+                try (var in = new FileInputStream(localFile)) {
+                    var skipped = in.skip(offset);
+                    while (skipped < offset) {
+                        var more = in.skip(offset - skipped);
+                        if (more == 0) throw new IOException("seek failed: " + offset);
+                        skipped += more;
+                    }
+                    long read;
+                    while (done < length && (read = in.read(buffer, 0,
+                            (int) Math.min(buffer.length, length - done))) != -1) {
+                        sink.write(buffer, 0, (int) read);
+                        done += read;
+                        if (cb != null) cb.onProgress(taskId, offset + done, totalSize);
+                    }
+                }
+            }
+        }).build();
+        try (var resp = client().newCall(request).execute()) {
+            var code = resp.code();
+            if (code < 200 || code >= 300) {
+                throw new CloudException(CloudException.Kind.REMOTE,
+                        "阿里云盘分片上传 HTTP " + code + ": " + truncate(resp.body() != null ? resp.body().string() : "", 200));
+            }
+        }
+        return length;
+    }
+
+    // ========== 下载 ==========
+
+    @Override
+    public String downloadFile(String remotePath, String localPath) throws CloudException {
+        try {
+            var remote = trimSlashes(remotePath);
+            var entry = findEntry(pathParent(remote), pathName(remote));
+            if (entry == null || entry.fileId.isEmpty()) {
+                throw new CloudException(CloudException.Kind.REMOTE, "阿里云盘文件不存在: " + remotePath);
+            }
+            var body = new JSONObject();
+            body.put("drive_id", driveId());
+            body.put("file_id", entry.fileId);
+            body.put("expire_sec", 14400);
+            var urlJson = request("/v2/file/get_download_url", body);
+            var dl = urlJson.optString("url", "");
+            if (dl.isEmpty()) {
+                throw new CloudException(CloudException.Kind.REMOTE,
+                        "阿里云盘缺少下载地址: " + truncate(urlJson.toString(), 300));
+            }
+            // OSS 下载地址必须带 alipan Referer（对齐 alist Link()）
+            var request = new Request.Builder().url(dl)
+                    .header("Referer", ORIGIN + "/").build();
+            try (var resp = client().newCall(request).execute()) {
+                var code = resp.code();
+                if (code < 200 || code >= 300) {
+                    throw new CloudException(CloudException.Kind.REMOTE, "阿里云盘下载 HTTP " + code);
+                }
+                var respBody = resp.body();
+                if (respBody == null) {
+                    throw new CloudException(CloudException.Kind.REMOTE, "阿里云盘下载空响应");
+                }
+                try (var out = new FileOutputStream(localPath); var in = respBody.byteStream()) {
+                    var buffer = new byte[BUFFER_SIZE];
+                    int read;
+                    while ((read = in.read(buffer)) != -1) {
+                        out.write(buffer, 0, read);
+                    }
+                }
+            }
+            var localLen = new File(localPath).length();
+            LogHelp.i(TAG, "阿里云盘 download done name=" + entry.name
+                    + " local=" + localLen + " remote=" + entry.size
+                    + (localLen == entry.size ? "" : " **SIZE-MISMATCH**"));
+            return "OK: " + remotePath + " -> " + localPath;
+        } catch (CloudException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new CloudException(CloudException.Kind.REMOTE, e);
+        }
+    }
+
+    // ========== 删除 ==========
+
+    @Override
+    public void deleteDir(String remoteDir) throws CloudException {
+        deletePath(remoteDir);
+    }
+
+    @Override
+    public void deleteFile(String remotePath) throws CloudException {
+        deletePath(remotePath);
+    }
+
+    private void deletePath(String remotePath) throws CloudException {
+        try {
+            var remote = trimSlashes(remotePath);
+            if (remote.isEmpty()) return;
+            var entry = findEntry(pathParent(remote), pathName(remote));
+            if (entry == null || entry.fileId.isEmpty()) return;
+            var body = new JSONObject();
+            body.put("drive_id", driveId());
+            body.put("file_id", entry.fileId);
+            request("/v2/recyclebin/trash", body);
+            LogHelp.i(TAG, "阿里云盘已移入回收站: " + remote);
+        } catch (CloudException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new CloudException(CloudException.Kind.REMOTE, e);
+        }
+    }
+
+    // ========== 静默刷新 ==========
+
+    /** 刷新锁：refresh_token 轮换单次有效，多线程并发刷新会互相挤掉（对齐光鸦 HIGH-06） */
+    private static final Object REFRESH_LOCK = new Object();
+
+    @Override
+    public boolean refresh() {
+        try {
+            refreshAccessToken();
+            return true;
+        } catch (Exception e) {
+            LogHelp.w(TAG, "阿里云盘刷新失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private String refreshAccessToken() throws CloudException {
+        synchronized (REFRESH_LOCK) {
+            var rt = EncryptedCredStore.get(id(), "refresh_token");
+            if (rt.isEmpty()) {
+                throw new CloudException(CloudException.Kind.AUTH_EXPIRED, "阿里云盘无 refresh_token，需重新登录");
+            }
+            var body = new JSONObject();
+            try {
+                body.put("refresh_token", rt);
+                body.put("grant_type", "refresh_token");
+            } catch (Exception ignored) {
+            }
+            var resp = httpPost(AUTH_BASE + "/v2/account/token", authHeaders(), body);
+            try {
+                var j = new JSONObject(resp.body);
+                var token = j.optString("access_token", "");
+                if (token.isEmpty()) {
+                    // 错误响应（HTTP 4xx 或 200+错误 JSON）统一按凭据失效处理
+                    throw new CloudException(CloudException.Kind.AUTH_EXPIRED,
+                            "阿里云盘刷新失败: " + j.optString("code", "") + " "
+                                    + j.optString("message", truncate(resp.body, 120)));
+                }
+                EncryptedCredStore.put(id(), "access_token", token);
+                // refresh_token 轮换：必须持久化新值，旧值即刻失效
+                var newRt = j.optString("refresh_token", "");
+                if (!newRt.isEmpty()) {
+                    EncryptedCredStore.put(id(), "refresh_token", newRt);
+                }
+                LogHelp.i(TAG, "阿里云盘 token 已刷新");
+                return token;
+            } catch (CloudException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new CloudException(CloudException.Kind.REMOTE, e);
+            }
+        }
+    }
+
+    // ========== 业务 API（请求头体系 + 设备签名 + 错误自愈重试） ==========
+
+    private static final int MAX_RETRY = 4;
+
+    /** POST 业务 API：AccessTokenInvalid → 刷新重试；DeviceSessionSignatureInvalid → 注册设备重试 */
+    private JSONObject request(String path, JSONObject data) throws CloudException {
+        var retriedRefresh = false;
+        var retriedSession = false;
+        for (var i = 0; i < MAX_RETRY; i++) {
+            var resp = httpPost(API_BASE + path, apiHeaders(), data);
+            var code = "";
+            var message = "";
+            if (resp.code < 500 && !resp.body.isEmpty()) {
+                try {
+                    var j = new JSONObject(resp.body);
+                    code = j.optString("code", "");
+                    message = j.optString("message", "");
+                } catch (Exception ignored) {
+                }
+            }
+            var authExpired = resp.code == 401 || "AccessTokenInvalid".equals(code) || "IlegalToken".equals(code);
+            if (authExpired && !retriedRefresh) {
+                retriedRefresh = true;
+                LogHelp.i(TAG, "阿里云盘 token 失效，刷新重试: " + path);
+                refreshAccessToken();
+                continue;
+            }
+            if ("DeviceSessionSignatureInvalid".equals(code) && !retriedSession) {
+                retriedSession = true;
+                LogHelp.i(TAG, "阿里云盘设备签名未注册，create_session 重试: " + path);
+                createSession();
+                continue;
+            }
+            if (resp.code == 401 || resp.code == 403) {
+                throw new CloudException(CloudException.Kind.AUTH_EXPIRED,
+                        "阿里云盘认证失败 HTTP " + resp.code + ": " + truncate(resp.body, 200));
+            }
+            if (resp.code < 200 || resp.code >= 300) {
+                throw new CloudException(CloudException.Kind.REMOTE,
+                        "阿里云盘 API HTTP " + resp.code + " " + code + ": " + truncate(resp.body, 200));
+            }
+            try {
+                // 部分端点（recyclebin/trash 等）成功时可能返回空 body
+                return resp.body.isBlank() ? new JSONObject() : new JSONObject(resp.body);
+            } catch (Exception e) {
+                throw new CloudException(CloudException.Kind.REMOTE,
+                        "阿里云盘响应非 JSON: " + truncate(resp.body, 200));
+            }
+        }
+        throw new CloudException(CloudException.Kind.REMOTE, "阿里云盘重试次数用尽: " + path);
+    }
+
+    /** 注册设备公钥（首次签名 403/签名失效时触发，对齐 alist createSession） */
+    private void createSession() throws CloudException {
+        ensureIdentityKeys();
+        var body = new JSONObject();
+        try {
+            body.put("deviceName", "samsung");
+            body.put("modelName", "SM-G9810");
+            body.put("nonce", 0);
+            body.put("pubKey", hex(Secp256k1.publicKey(deviceKey())));
+            body.put("refreshToken", EncryptedCredStore.get(id(), "refresh_token"));
+        } catch (Exception e) {
+            throw new CloudException(CloudException.Kind.REMOTE, e);
+        }
+        var resp = httpPost(API_BASE + "/users/v1/users/device/create_session", apiHeaders(), body);
+        if (resp.code < 200 || resp.code >= 300) {
+            throw new CloudException(CloudException.Kind.REMOTE,
+                    "阿里云盘 create_session HTTP " + resp.code + ": " + truncate(resp.body, 200));
+        }
+        LogHelp.i(TAG, "阿里云盘设备会话已注册");
+    }
+
+    /** 业务请求头（对齐 alist：Bearer 制表符分隔、origin/referer、Android canary、设备签名） */
+    private Map<String, String> apiHeaders() {
+        var h = new LinkedHashMap<String, String>();
+        // 注意：对齐 alist 用 "Bearer\t"（制表符）分隔——服务端按前缀解析，勿改成空格以外随意变更
+        h.put("Authorization", "Bearer\t" + EncryptedCredStore.get(id(), "access_token"));
+        h.put("Content-Type", "application/json");
+        h.put("origin", ORIGIN);
+        h.put("Referer", "https://alipan.com/");
+        h.put("x-request-id", UUID.randomUUID().toString());
+        h.put("X-Canary", "client=Android,app=adrive,version=v4.1.0");
+        var uid = EncryptedCredStore.get(id(), "user_id");
+        if (!uid.isEmpty()) {
+            ensureSignature(uid);
+            h.put("X-Device-Id", deviceId);
+            h.put("X-Signature", signature);
+        }
+        return h;
+    }
+
+    private Map<String, String> authHeaders() {
+        var h = new LinkedHashMap<String, String>();
+        h.put("Content-Type", "application/json");
+        h.put("origin", ORIGIN);
+        h.put("Referer", "https://alipan.com/");
+        return h;
+    }
+
+    /** 确保 userId/deviceId/signature 已派生（签名仅依赖 user_id，可离线计算） */
+    private void ensureSignature(String uid) {
+        if (uid.equals(userId) && signature != null) return;
+        try {
+            userId = uid;
+            deviceId = sha256Hex(uid);
+            var message = SECP_APP_ID + ":" + deviceId + ":" + uid + ":0";
+            var hash = MessageDigest.getInstance("SHA-256").digest(message.getBytes(StandardCharsets.UTF_8));
+            signature = hex(Secp256k1.sign(hash, deviceKey()));
+        } catch (Exception e) {
+            signature = null;
+            LogHelp.e(TAG, "阿里云盘签名派生失败", e);
+        }
+    }
+
+    private void ensureIdentityKeys() throws CloudException {
+        var uid = EncryptedCredStore.get(id(), "user_id");
+        if (uid.isEmpty()) {
+            // 身份未建立：先 user/get（该端点允许空签名）
+            testConnection();
+            uid = EncryptedCredStore.get(id(), "user_id");
+        }
+        if (uid.isEmpty()) {
+            throw new CloudException(CloudException.Kind.AUTH_EXPIRED, "阿里云盘身份不可用，请重新登录");
+        }
+        ensureSignature(uid);
+    }
+
+    private byte[] deviceKey() {
+        // 私钥 = SHA-256(user_id) 的 hex 字符串再取字节（对齐 alist：deviceID 即私钥 hex）
+        return deviceId.getBytes(StandardCharsets.US_ASCII);
+    }
+
+    // ========== 路径解析 ==========
+
+    private String driveId() throws CloudException {
+        var did = EncryptedCredStore.get(id(), "drive_id");
+        if (!did.isEmpty()) return did;
+        testConnection();
+        did = EncryptedCredStore.get(id(), "drive_id");
+        if (did.isEmpty()) {
+            throw new CloudException(CloudException.Kind.REMOTE, "阿里云盘缺少 drive_id");
+        }
+        return did;
+    }
+
+    private static class Entry {
+        final String fileId;
+        final String name;
+        final long size;
+        final boolean isDir;
+        final long modifiedTime;
+
+        Entry(String fileId, String name, long size, boolean isDir, long modifiedTime) {
+            this.fileId = fileId;
+            this.name = name;
+            this.size = size;
+            this.isDir = isDir;
+            this.modifiedTime = modifiedTime;
+        }
+    }
+
+    /** 分页枚举目录（v2/file/list，marker 翻页，200/页） */
+    private List<Entry> listChildren(String parentId) throws CloudException {
+        var items = new ArrayList<Entry>();
+        var marker = "";
+        for (var guard = 0; guard < 100; guard++) {
+            var body = new JSONObject();
+            try {
+                body.put("drive_id", driveId());
+                body.put("parent_file_id", parentId == null || parentId.isEmpty() ? "root" : parentId);
+                body.put("limit", 200);
+                body.put("order_by", "name");
+                body.put("order_direction", "ASC");
+                body.put("fields", "*");
+                if (!marker.isEmpty()) body.put("marker", marker);
+            } catch (Exception ignored) {
+            }
+            var resp = request("/v2/file/list", body);
+            var arr = resp.optJSONArray("items");
+            if (arr != null) {
+                for (var i = 0; i < arr.length(); i++) {
+                    var o = arr.optJSONObject(i);
+                    if (o != null) items.add(toEntry(o));
+                }
+            }
+            marker = resp.optString("next_marker", "");
+            if (marker.isEmpty()) break;
+        }
+        return items;
+    }
+
+    private static Entry toEntry(JSONObject o) {
+        var isDir = "folder".equals(o.optString("type")) || o.optBoolean("is_folder", false);
+        var modified = o.optLong("updated_at", 0L);
+        if (o.has("updated_at") && o.optString("updated_at", "").contains("T")) {
+            try {
+                modified = java.time.Instant.parse(o.optString("updated_at", "")).toEpochMilli();
+            } catch (Exception ignored) {
+            }
+        }
+        return new Entry(o.optString("file_id", ""), o.optString("name", ""),
+                o.optLong("size", 0L), isDir, modified);
+    }
+
+    private Entry findChild(String parentId, String name) throws CloudException {
+        for (var e : listChildren(parentId)) {
+            if (e.name.equals(name)) return e;
+        }
+        return null;
+    }
+
+    /** 解析路径为目录 file_id；createMissing=true 时逐级建目录 */
+    private String resolvePath(String path, boolean createMissing) throws CloudException {
+        var v = trimSlashes(path);
+        if (v.isEmpty()) return "root";
+        var parentId = "root";
+        for (var part : v.split("/")) {
+            var name = cleanName(part);
+            if (name.isEmpty()) continue;
+            var child = findChild(parentId, name);
+            if (child == null) {
+                if (!createMissing) return null;
+                parentId = createFolder(parentId, name);
+                continue;
+            }
+            if (!child.isDir) {
+                throw new CloudException(CloudException.Kind.REMOTE, "阿里云盘路径非目录: " + name);
+            }
+            parentId = child.fileId;
+        }
+        return parentId;
+    }
+
+    private String createFolder(String parentId, String name) throws CloudException {
+        var body = new JSONObject();
+        try {
+            body.put("check_name_mode", "refuse");
+            body.put("drive_id", driveId());
+            body.put("name", name);
+            body.put("parent_file_id", parentId);
+            body.put("type", "folder");
+        } catch (Exception ignored) {
+        }
+        var resp = request("/adrive/v2/file/createWithFolders", body);
+        var fileId = resp.optString("file_id", "");
+        if (fileId.isEmpty()) {
+            var child = findChild(parentId, name);
+            if (child != null) fileId = child.fileId;
+        }
+        if (fileId.isEmpty()) {
+            throw new CloudException(CloudException.Kind.REMOTE, "阿里云盘建目录失败: " + name);
+        }
+        LogHelp.i(TAG, "阿里云盘 mkdir name=" + name + " -> " + fileId);
+        return fileId;
+    }
+
+    private Entry findEntry(String parentPath, String targetName) throws CloudException {
+        var parentId = resolvePath(parentPath, false);
+        if (parentId == null) return null;
+        return findChild(parentId, targetName);
+    }
+
+    // ========== HTTP 层 ==========
+
+    private static class HttpResponse {
+        int code;
+        String body = "";
+    }
+
+    private HttpResponse httpPost(String url, Map<String, String> headers, JSONObject data) throws CloudException {
+        var builder = new Request.Builder().url(url);
+        for (var e : headers.entrySet()) builder.header(e.getKey(), e.getValue());
+        builder.post(RequestBody.create(JSON, data.toString()));
+        try (var r = client().newCall(builder.build()).execute()) {
+            var resp = new HttpResponse();
+            resp.code = r.code();
+            resp.body = r.body() != null ? r.body().string() : "";
+            return resp;
+        } catch (Exception e) {
+            throw new CloudException(CloudException.Kind.NETWORK, e);
+        }
+    }
+
+    private static OkHttpClient sClient;
+
+    private static OkHttpClient client() {
+        if (sClient != null) return sClient;
+        synchronized (AliDriveProvider.class) {
+            if (sClient != null) return sClient;
+            sClient = new OkHttpClient.Builder()
+                    .connectTimeout(15, TimeUnit.SECONDS)
+                    .readTimeout(10, TimeUnit.MINUTES)
+                    .writeTimeout(10, TimeUnit.MINUTES)
+                    .build();
+            return sClient;
+        }
+    }
+
+    // ========== 工具 ==========
+
+    private static String sha256Hex(String text) throws Exception {
+        var digest = MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8));
+        return hex(digest);
+    }
+
+    private static String hex(byte[] bytes) {
+        var out = new StringBuilder(bytes.length * 2);
+        for (var b : bytes) {
+            out.append(String.format("%02x", b));
+        }
+        return out.toString();
+    }
+
+    private static String truncate(String text, int max) {
+        if (text == null) return "";
+        return text.length() <= max ? text : text.substring(0, max) + "...";
+    }
+
+    private static String trimSlashes(String path) {
+        var v = path == null ? "" : path.replace('\\', '/');
+        while (v.startsWith("/")) v = v.substring(1);
+        while (v.endsWith("/")) v = v.substring(0, v.length() - 1);
+        return v;
+    }
+
+    private static String pathParent(String path) {
+        var v = trimSlashes(path);
+        var i = v.lastIndexOf('/');
+        return i < 0 ? "" : v.substring(0, i);
+    }
+
+    private static String pathName(String path) {
+        var v = trimSlashes(path);
+        var i = v.lastIndexOf('/');
+        return i < 0 ? v : v.substring(i + 1);
+    }
+
+    /** 清理文件名中的控制字符/零宽字符并 trim（对齐光鸦 cleanName） */
+    private static String cleanName(String name) {
+        if (name == null) return "";
+        var out = new StringBuilder();
+        for (var i = 0; i < name.length(); i++) {
+            var c = name.charAt(i);
+            var code = (int) c;
+            if ((code >= 0x0000 && code <= 0x001F) || (code >= 0x007F && code <= 0x009F)
+                    || (code >= 0x200B && code <= 0x200F) || code == 0xFEFF) {
+                continue;
+            }
+            out.append(c);
+        }
+        return out.toString().trim();
+    }
+}

@@ -120,6 +120,9 @@
     <string name="title_webview_login_guangya">Log in to Guangya Cloud Drive</string>
     <string name="cloud_provider_quark">Quark Drive</string>
     <string name="cloud_provider_quark_hint">In-app web login</string>
+    <string name="cloud_provider_aliyun">Aliyun Drive (Alipan)</string>
+    <string name="cloud_provider_aliyun_hint">In-app web login</string>
+    <string name="title_webview_login_aliyun">Log in to Aliyun Drive</string>
     <string name="cloud_provider_123">123 Cloud Drive</string>
     <string name="cloud_provider_123_hint">In-app web login</string>
     <string name="title_webview_login_123">Log in to 123 Cloud Drive</string>

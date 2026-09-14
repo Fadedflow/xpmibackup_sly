@@ -10,7 +10,7 @@
 
 本项目是 [XPoser\_MiBackup](https://github.com/zgcwkjOpenProject/XPoser_MiBackup) 仓库的延申版本，在原版 SMB / WebDAV / 自定义 HTTP 脚本三种通道基础上，新增多账号管理、凭据加密存储、移动云盘（139）、光鸭云盘、夸克云盘、123云盘、天翼云盘（189）、百度网盘、联通沃盘内置 Provider、OAuth2/会话自动刷新等能力。
 
-通过 Xposed 模块虚拟小米智能存储设备，将小米备份 App 的 DFS 存储流程重定向到自建 SMB、WebDAV、自定义 HTTP 脚本，或内置的移动云盘（139）、光鸭云盘、夸克云盘、123云盘、天翼云盘（189）、百度网盘、联通沃盘，实现备份与恢复数据的云端存储。
+通过 Xposed 模块虚拟小米智能存储设备，将小米备份 App 的 DFS 存储流程重定向到自建 SMB、WebDAV、自定义 HTTP 脚本，或内置的移动云盘（139）、光鸭云盘、夸克云盘、阿里云盘、123云盘、天翼云盘（189）、百度网盘、联通沃盘，实现备份与恢复数据的云端存储。
 
 ## 原理
 
@@ -20,7 +20,7 @@
 小米备份 App
   -> 查询智能存储设备：返回虚拟设备
   -> 连接 DFS 服务：模拟在线和已连接
-  -> DFS AIDL 上传：写入 SMB / WebDAV / 脚本 / 139 / 光鸭 / 夸克 / 123 / 189 / 百度 / 联通沃盘
+  -> DFS AIDL 上传：写入 SMB / WebDAV / 脚本 / 139 / 光鸭 / 夸克 / 阿里 / 123 / 189 / 百度 / 联通沃盘
   -> DFS AIDL 下载：从对应云端读取
   -> 进度与完成回调：回传给小米备份原流程
 ```
@@ -31,12 +31,12 @@
 
 - 在系统设置中注入「云备份助手」配置入口
 - 拦截 DFS 连接，模拟小米智能存储设备在线状态
-- 支持十种传输通道：SMB/CIFS、WebDAV、自定义 HTTP 脚本、移动云盘（139）、光鸭云盘、夸克云盘、123云盘（v0.9.5 起暂停支持）、天翼云盘（189）、百度网盘、联通沃盘
+- 支持十一种传输通道：SMB/CIFS、WebDAV、自定义 HTTP 脚本、移动云盘（139）、光鸭云盘、夸克云盘、阿里云盘、123云盘（v0.9.5 起暂停支持）、天翼云盘（189）、百度网盘、联通沃盘
 - 备份至 PC：备份页自动扫描局域网 / USB 发现电脑端 mibackpc（`pc/` 目录），手机弹窗连接 + 电脑端确认配对，免手动填地址；连接成功后备份方式出现「备份至 PC」
 - 多账号 / 多方案管理：NAS 方案（SMB/WebDAV/脚本）与云盘账号（139/光鸭/夸克/123/189/百度/沃盘）可并存，按需切换备份目标
 - 凭据加密存储：密码、Token、Cookie 经 AES-GCM 加密落盘，按账号隔离
 - 网盘 Token 自动刷新：光鸭 OAuth2 refresh_token 自动轮换；夸克 __puus 会话自动续期，401 自动重试；天翼 refreshToken 自动轮换 + accessToken 过期自愈
-- 大文件在 Cloud 层统一切片上传，十种协议共用同一套切片逻辑
+- 大文件在 Cloud 层统一切片上传，十一种协议共用同一套切片逻辑
 - 自动清理超出数量限制的旧备份
 - Android 11~17 适配：edge-to-edge（含底部导航栏 insets，仅 Android 15+ 强制）、Android 17 本地网络保护（SMB/WebDAV 专项提示）、static final 反射限制审计、配置变更行为兼容
 - Hook 跨版本兼容（HIGH-25）：小米备份类名/混淆方法名漂移时多候选自动降级 + 诊断日志，DFS AIDL transact code 漂移可观测
@@ -167,6 +167,7 @@ NAS 方案 Provider 实例按 profileId 缓存；云盘账号 Provider **不缓�
 | 139 云盘 | Authorization（Basic）         | WebView 网页登录捕获 | 不支持（Cookie 型）              | 引导重新登录                |
 | 光鸭云盘   | access_token + refresh_token | WebView 网页登录捕获 | OAuth2 refresh_token 自动轮换  | refresh_token 失效则引导重登 |
 | 夸克云盘   | Cookie（含 __puus 会话）       | WebView 网页登录捕获 | __puus 响应 Set-Cookie 自动续期 | 会话失效则引导重新登录        |
+| 阿里云盘   | refresh_token（轮换）          | WebView 网页登录捕获 | auth.alipan.com 刷新自动轮换（secp256k1 设备签名） | refresh_token 失效则引导重登 |
 | 123云盘   | Bearer token（JWT）          | WebView 网页登录捕获 | 不支持（Token 型）              | 引导重新登录                |
 | 天翼云盘(189) | SSON Cookie + access_token + refresh_token | WebView 网页登录捕获 | refreshToken 自动轮换；InvalidAccessToken/InvalidSessionKey 自愈重试 | 会话失效则引导重新登录 |
 | 百度网盘   | Cookie（含 BDUSS）            | WebView 网页登录捕获 | 不支持（BDUSS 无刷新机制）         | BDUSS 失效则引导重新登录     |
@@ -192,6 +193,16 @@ NAS 方案 Provider 实例按 profileId 缓存；云盘账号 Provider **不缓�
 - **上传（OSS 五步）**：`file/upload/pre` 预上传 → `file/update/hash` 上报 md5/sha1（可秒传）→ `file/upload/auth` 换取分片授权 → OSS `PUT` 分片直传（分片大小取 pre 响应下发的 `part_size`）→ `file/upload/auth` 换合并授权 + OSS `CompleteMultipartUpload` → `file/upload/finish` 确认
 - **签名要点**：OSS 签名由服务端按 `auth_meta` 签发，请求头必须与实际发送完全一致（Content-Type 需含 `; charset=utf-8` 等细节），否则返回 `403 SignatureDoesNotMatch`
 - **列表 / 下载**：`GET /file/sort` 分页列目录；`POST /file/download` 换取直链后流式下载（带 Cookie/Referer/UA）
+
+### 阿里云盘（aliyun）Web API + 设备签名
+
+阿里云盘无对个人开放的免注册 API，实现参考在维护的第三方项目 [AlistGo/alist](https://github.com/AlistGo/alist) `drivers/aliyundrive`（Web API + Android 客户端仿真）：
+
+- **登录**：WebView 加载 `www.alipan.com` 完成网页登录，扫描 localStorage 提取 `refreshtoken`（显式键名 + 通配扫描双保险）；「完成」后立即刷新换新验证（refresh_token 单次轮换即校验有效性）再保存
+- **Token 续期**：`auth.alipan.com/v2/account/token`（grant_type=refresh_token，无需 client_id）刷新，access_token 约 2 小时有效；轮换新 refresh_token 立即写回加密存储；业务 API 遇 401/`AccessTokenInvalid` 自动刷新重试一次
+- **设备签名**：以 user_id 派生 secp256k1 密钥（deviceID = SHA-256(user_id) 即私钥），`users/v1/users/device/create_session` 注册公钥；每个请求携带 `X-Signature`（SHA-256("secpAppID:deviceID:userID:0") 签名）、`X-Device-Id`、`X-Canary`（Android 客户端标识）；遇 `DeviceSessionSignatureInvalid` 自动注册重试。secp256k1 为纯 JDK BigInteger 实现（Android JCE 不支持该曲线），经已知曲线向量与签名往返验证
+- **上传**：`adrive/v2/file/createWithFolders`（10MB 分片预签名 OSS 地址）→ 分片 `PUT` 直传（无鉴权头）→ `v2/file/complete` 提交；0 字节文件（end 标记）对齐其他通道 mock 成功
+- **列表 / 下载 / 删除**：`v2/file/list`（marker 翻页）；`v2/file/get_download_url` 直链下载（OSS 下载必须带 alipan Referer）；`v2/recyclebin/trash` 入回收站式删除
 
 ### 天翼云盘（189）会话与签名
 
@@ -383,7 +394,7 @@ app/src/main/java/com/suileyan/
 | -------------------- | ------------------------------------------ |
 | `SettingsHook`       | 在设置 App 中注入配置入口，展示虚拟智能存储设备                 |
 | `AIDLHook`           | 模拟 DFS 服务连接，拦截上传、下载、目录查询，分发到 CloudFileHelp |
-| CloudFileHelp      | 统一分发十种通道，处理跨协议切片与 AUTH_EXPIRED 重试          |
+| CloudFileHelp      | 统一分发十一种通道，处理跨协议切片与 AUTH_EXPIRED 重试          |
 | `BackupHook`         | 修正备份 App 页面、通知、进度焦点和取消清理                   |
 | `AutoBackupHook`     | 接入备份 App 原生自动备份设置和调度链路                     |
 | `ProviderRegistry`   | 按备份目标（云盘账号优先，其次激活方案）取 Provider 实例          |
