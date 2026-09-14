@@ -59,6 +59,12 @@ public final class Async {
             thread.setName("XpMiBackup-" + taskName);
             try {
                 runnable.run();
+            } catch (Throwable e) {
+                // 兜底：线程池 worker 的未捕获异常会走默认 UncaughtExceptionHandler 直接杀进程，
+                // 而启动阶段的凭据预热 / 版本检查 / Root 快照扫描都在本池中执行，
+                // 一旦抛出就是无堆栈可查的"静默闪退"。此处捕获并落盘，保留现场。
+                LogHelp.e("XpMiBackup", "async task failed: " + taskName, e);
+                CrashLog.record("Async-" + taskName, e);
             } finally {
                 thread.setName(original);
             }
