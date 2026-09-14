@@ -1,12 +1,15 @@
 // mibackpc —— XpMiBackup 电脑端接收器
 //
 // 单文件、纯标准库、零 CGO：把任意文件夹变成一台 WebDAV 服务器，
-// 供手机端 XpMiBackup 的「WebDAV 方案」直接备份/恢复到电脑。
+// 供手机端 XpMiBackup 备份/恢复到电脑。
 //
-// 传输通道二选一（客户端 URL 不同而已，服务端无感知）：
+// 连接流程（手机端无需手动配置）：
 //
-//	局域网：手机填 http://<电脑局域网IP>:8321/dav/
-//	USB  ：本工具自动执行 adb reverse tcp:8321 tcp:8321，手机填 http://127.0.0.1:8321/dav/
+//	发现：手机备份页自动探测 —— 局域网走 UDP 8322 广播应答，
+//	      USB 走 adb reverse 后探测 http://127.0.0.1:8321/miback/info
+//	配对：手机 POST /pair/requests → 本机弹 Windows 原生确认框
+//	      （或控制页「连接请求」卡片）→ 同意后凭据单次下发
+//	传输：http://<电脑局域网IP>:8321/dav/（USB 为 http://127.0.0.1:8321/dav/）
 //
 // 协议子集按 src/app/.../comm/WebdavFileHelp.java 的线上行为逐条对齐：
 //
@@ -41,10 +44,11 @@ import (
 // ---------- 配置持久化 ----------
 
 type Config struct {
-	Root string `json:"root"` // 备份文件落地目录
-	Port int    `json:"port"`
-	User string `json:"user"`
-	Pass string `json:"pass"`
+	Root string   `json:"root"` // 备份文件落地目录
+	Port int      `json:"port"`
+	User string   `json:"user"`
+	Pass string   `json:"pass"`
+	Pair []string `json:"paired"` // 已配对过的手机设备名（展示用，最新在后，最多保留 8 台）
 }
 
 func configPath() string {
@@ -77,6 +81,23 @@ func loadConfig() *Config {
 func (c *Config) save() {
 	b, _ := json.MarshalIndent(c, "", "  ")
 	_ = os.WriteFile(configPath(), b, 0600)
+}
+
+// recordPairedDevice 记录已配对手机（去重，最多 8 台，供控制页展示）
+func (c *Config) recordPairedDevice(name string) {
+	if name == "" {
+		return
+	}
+	for _, p := range c.Pair {
+		if p == name {
+			return
+		}
+	}
+	c.Pair = append(c.Pair, name)
+	if len(c.Pair) > 8 {
+		c.Pair = c.Pair[len(c.Pair)-8:]
+	}
+	c.save()
 }
 
 // ---------- 传输日志（环形） ----------
@@ -400,6 +421,175 @@ func dirExists(p string) bool {
 	return err == nil && st.IsDir()
 }
 
+// ---------- 自动发现（UDP 广播应答） ----------
+
+const (
+	discoverPort  = 8322
+	discoverMagic = "MIBACKPC_DISCOVER_V1"
+)
+
+func hostName() string {
+	if h, err := os.Hostname(); err == nil && h != "" {
+		return h
+	}
+	return "PC"
+}
+
+func discoverPayload(c *Config) []byte {
+	b, _ := json.Marshal(map[string]any{
+		"service": "mibackpc",
+		"name":    hostName(),
+		"tcp":     c.Port,
+		"ver":     1,
+	})
+	return b
+}
+
+// serveDiscovery 监听 UDP 8322：手机端备份页发广播探测码，本机单播回 JSON。
+// 手机只需发广播 + 收单播应答，无需组播锁等特殊权限。
+func serveDiscovery(c *Config) {
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: discoverPort})
+	if err != nil {
+		logf("自动发现(UDP %d)不可用: %v", discoverPort, err)
+		return
+	}
+	defer conn.Close()
+	logf("自动发现已就绪（UDP %d）", discoverPort)
+	buf := make([]byte, 128)
+	for {
+		n, raddr, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			return
+		}
+		if strings.TrimSpace(string(buf[:n])) != discoverMagic {
+			continue
+		}
+		_, _ = conn.WriteToUDP(discoverPayload(c), raddr)
+	}
+}
+
+// ---------- 手机配对（请求 → 电脑端确认 → 下发凭据） ----------
+
+const pairTTL = 5 * time.Minute
+
+type pairReq struct {
+	ID      string    `json:"id"`
+	Device  string    `json:"device"`
+	IP      string    `json:"ip"`
+	Created time.Time `json:"created"`
+	Status  string    `json:"status"` // pending / approved / denied
+}
+
+var pairStore struct {
+	mu      sync.Mutex
+	current *pairReq // 同时只保留一个请求；新请求顶替旧的（旧弹窗选择按 ID 作废）
+}
+
+// pairDecide 电脑端落定结果。仅当 id 仍是当前 pending 时生效；approved 保留在
+// current 等手机取件，denied 保留供结果端点返回后清掉。
+func pairDecide(c *Config, id string, approve bool) bool {
+	pairStore.mu.Lock()
+	defer pairStore.mu.Unlock()
+	req := pairStore.current
+	if req == nil || req.ID != id || req.Status != "pending" {
+		return false
+	}
+	if approve {
+		req.Status = "approved"
+		c.recordPairedDevice(req.Device)
+		logf("已允许手机「%s」（%s）连接", req.Device, req.IP)
+	} else {
+		req.Status = "denied"
+		logf("已拒绝手机「%s」（%s）连接", req.Device, req.IP)
+	}
+	return true
+}
+
+func pairView(req *pairReq) map[string]any {
+	if req == nil || req.Status != "pending" {
+		return nil
+	}
+	return map[string]any{
+		"device": req.Device,
+		"ip":     req.IP,
+		"age":    int(time.Since(req.Created).Seconds()),
+	}
+}
+
+// pairHandler 面向局域网手机：POST /pair/requests 发起请求，GET …/result 轮询结果。
+// 结果仅下发给发起请求的同一 IP，凭据取走即焚。
+func pairHandler(w http.ResponseWriter, r *http.Request, c *Config) {
+	callerIP, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || net.ParseIP(callerIP) == nil {
+		http.Error(w, "bad client addr", http.StatusBadRequest)
+		return
+	}
+
+	switch {
+	case r.URL.Path == "/pair/requests" && r.Method == "POST":
+		var req struct {
+			Device string `json:"device"`
+			ReqID  string `json:"reqId"`
+		}
+		_ = json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req)
+		req.Device = strings.TrimSpace(req.Device)
+		req.ReqID = strings.TrimSpace(req.ReqID)
+		if req.Device == "" || len([]rune(req.Device)) > 64 || len(req.ReqID) < 16 || len(req.ReqID) > 64 {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		pending := &pairReq{
+			ID:      req.ReqID,
+			Device:  req.Device,
+			IP:      callerIP,
+			Created: time.Now(),
+			Status:  "pending",
+		}
+		pairStore.mu.Lock()
+		pairStore.current = pending
+		pairStore.mu.Unlock()
+		logf("收到手机「%s」连接请求（%s）", pending.Device, callerIP)
+		pairPopup(pending.Device, func(ok bool) { pairDecide(c, pending.ID, ok) })
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "pending"})
+
+	case strings.HasPrefix(r.URL.Path, "/pair/requests/") && strings.HasSuffix(r.URL.Path, "/result") && r.Method == "GET":
+		id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/pair/requests/"), "/result")
+		pairStore.mu.Lock()
+		req := pairStore.current
+		var resp map[string]any
+		switch {
+		case req == nil || req.ID != id:
+			resp = map[string]any{"status": "expired"}
+		case time.Since(req.Created) > pairTTL:
+			resp = map[string]any{"status": "expired"}
+			pairStore.current = nil
+		case req.IP != callerIP:
+			resp = map[string]any{"status": "forbidden"}
+		case req.Status == "pending":
+			resp = map[string]any{"status": "pending"}
+		case req.Status == "approved":
+			resp = map[string]any{
+				"status": "approved",
+				"name":   hostName(),
+				"user":   c.User,
+				"pass":   c.Pass,
+				"port":   c.Port,
+			}
+			pairStore.current = nil // 凭据取走即焚
+		default: // denied
+			resp = map[string]any{"status": "denied"}
+			pairStore.current = nil
+		}
+		pairStore.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(resp)
+
+	default:
+		http.NotFound(w, r)
+	}
+}
+
 // ---------- 控制面（仅本机访问） ----------
 
 func lanIPs() []string {
@@ -447,16 +637,38 @@ func controlHandler(w http.ResponseWriter, r *http.Request, c *Config) {
 
 	switch {
 	case r.URL.Path == "/api/state" && r.Method == "GET":
+		pairStore.mu.Lock()
+		pending := pairView(pairStore.current)
+		pairStore.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"root":   davRoot(),
-			"port":   c.Port,
-			"user":   c.User,
-			"pass":   c.Pass,
-			"lanIPs": lanIPs(),
-			"adbURL": fmt.Sprintf("http://127.0.0.1:%d/dav/", c.Port),
-			"adbOK":  adbReverse(c.Port),
+			"root":          davRoot(),
+			"port":          c.Port,
+			"user":          c.User,
+			"pass":          c.Pass,
+			"lanIPs":        lanIPs(),
+			"adbURL":        fmt.Sprintf("http://127.0.0.1:%d/dav/", c.Port),
+			"adbOK":         adbReverseCached(c.Port),
+			"name":          hostName(),
+			"pairPending":   pending,
+			"pairedDevices": c.Pair,
+			"discoverPort":  discoverPort,
 		})
+
+	case r.URL.Path == "/api/pair/decide" && r.Method == "POST":
+		var req struct {
+			Approve bool `json:"approve"`
+		}
+		_ = json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req)
+		pairStore.mu.Lock()
+		var id string
+		if pairStore.current != nil {
+			id = pairStore.current.ID
+		}
+		pairStore.mu.Unlock()
+		ok := id != "" && pairDecide(c, id, req.Approve)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": ok})
 
 	case r.URL.Path == "/api/root" && r.Method == "POST":
 		var req struct {
@@ -510,7 +722,7 @@ func controlHandler(w http.ResponseWriter, r *http.Request, c *Config) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"lines": cp})
 
 	case r.URL.Path == "/api/adb" && r.Method == "POST":
-		ok := adbReverse(c.Port)
+		ok := adbForce(c.Port)
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": ok})
 
@@ -523,13 +735,12 @@ func controlHandler(w http.ResponseWriter, r *http.Request, c *Config) {
 	}
 }
 
-// adbReverse 尽力建立 USB 通道：手机访问 127.0.0.1:port 即到达本机
+// adbReverse 尽力建立 USB 通道：手机访问 127.0.0.1:port 即到达本机（静默，仅失败记日志）
 func adbReverse(port int) bool {
 	for _, exe := range []string{"adb", "adb.exe"} {
 		if p, err := exec.LookPath(exe); err == nil {
 			cmd := exec.Command(p, "reverse", fmt.Sprintf("tcp:%d", port), fmt.Sprintf("tcp:%d", port))
 			if out, err := cmd.CombinedOutput(); err == nil {
-				logf("adb reverse 建立 USB 通道成功 (%d)", port)
 				_ = out
 				return true
 			} else {
@@ -541,63 +752,219 @@ func adbReverse(port int) bool {
 	return false
 }
 
-// ---------- 控制页 ----------
+// adbState 缓存 USB 通道状态：控制页轮询 /api/state 很频繁，不能每次都拉起 adb 子进程刷日志
+var adbState struct {
+	mu      sync.Mutex
+	ok      bool
+	known   bool
+	checked time.Time
+}
+
+// adbReverseCached 带缓存的通道探测（30s 内复用上次结果），状态变化才记日志
+func adbReverseCached(port int) bool {
+	adbState.mu.Lock()
+	defer adbState.mu.Unlock()
+	if adbState.known && time.Since(adbState.checked) < 30*time.Second {
+		return adbState.ok
+	}
+	ok := adbReverse(port)
+	if adbState.known && ok != adbState.ok {
+		logf("USB 通道状态变化：%s", map[bool]string{true: "已建立", false: "未建立"}[ok])
+	}
+	adbState.ok, adbState.known, adbState.checked = ok, true, time.Now()
+	return ok
+}
+
+// adbForce 控制页「重连」按钮：立即重新建立并刷新缓存
+func adbForce(port int) bool {
+	adbState.mu.Lock()
+	defer adbState.mu.Unlock()
+	ok := adbReverse(port)
+	adbState.ok, adbState.known, adbState.checked = ok, true, time.Now()
+	if ok {
+		logf("USB 通道已重新建立 (%d)", port)
+	}
+	return ok
+}
+
+// ---------- 控制页（Apple 设计语言：系统字体栈 / 中性表面 / 单一强调色 / 明暗自适应） ----------
 
 const indexHTML = `<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>mibackpc · 电脑备份接收器</title>
 <style>
- body{font-family:"Segoe UI",system-ui,sans-serif;background:#141517;color:#e6e6e6;margin:0;padding:24px;max-width:760px;margin-inline:auto}
- h1{font-size:20px;font-weight:600} h1 span{color:#8ab4f8}
- code{background:#232428;padding:2px 6px;border-radius:4px;font-size:13px;user-select:all}
- .card{background:#1d1e22;border:1px solid #2c2d31;border-radius:10px;padding:16px;margin-bottom:16px}
- label{display:block;font-size:12px;color:#9aa0a6;margin:10px 0 4px}
- input{width:100%;box-sizing:border-box;background:#232428;border:1px solid #3c3d42;color:#e6e6e6;border-radius:6px;padding:8px;font-size:14px}
- button{background:#8ab4f8;border:0;color:#141517;border-radius:6px;padding:8px 14px;font-size:14px;font-weight:600;cursor:pointer}
- button.gray{background:#3c3d42;color:#e6e6e6}
- .row{display:flex;gap:8px;align-items:flex-end}
- .row>div{flex:1}
- .url{font-size:15px;margin:6px 0;word-break:break-all}
- .ok{color:#81c995}.no{color:#f28b82}
- #log{background:#101114;border:1px solid #2c2d31;border-radius:6px;height:220px;overflow:auto;padding:10px;font:12px/1.5 Consolas,monospace;white-space:pre-wrap;color:#bdc1c6}
+ :root{
+  --bg:#f5f5f7; --card:#ffffff; --text:#1d1d1f; --text2:#6e6e73;
+  --hair:rgba(0,0,0,.08); --field:rgba(120,120,128,.08);
+  --accent:#0071e3; --accent-press:#0060c2;
+  --good:#34c759; --bad:#ff3b30; --chip:#e8e8ed;
+  --shadow:0 1px 2px rgba(0,0,0,.03),0 8px 24px rgba(0,0,0,.05);
+ }
+ @media (prefers-color-scheme:dark){
+  :root{
+   --bg:#000000; --card:#1c1c1e; --text:#f5f5f7; --text2:#86868b;
+   --hair:rgba(255,255,255,.12); --field:rgba(120,120,128,.22);
+   --accent:#0a84ff; --accent-press:#3395ff;
+   --good:#30d158; --bad:#ff453a; --chip:rgba(120,120,128,.24);
+   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.4);
+  }
+ }
+ *{box-sizing:border-box}
+ body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","PingFang SC","Segoe UI","Microsoft YaHei UI",sans-serif;
+  -webkit-font-smoothing:antialiased;font-size:15px;line-height:1.47059}
+ .wrap{max-width:640px;margin:0 auto;padding:48px 22px 64px}
+ h1{font-size:32px;font-weight:700;letter-spacing:-.015em;margin:0}
+ .sub{color:var(--text2);font-size:15px;margin:4px 0 0}
+ header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:28px}
+ .badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text2);
+  background:var(--chip);border-radius:980px;padding:4px 12px;white-space:nowrap}
+ .dot{width:7px;height:7px;border-radius:50%;background:var(--good);flex:none}
+ .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);
+  padding:20px;margin-bottom:16px}
+ .card h2{font-size:17px;font-weight:600;letter-spacing:-.01em;margin:0 0 4px}
+ .hint{color:var(--text2);font-size:13px;margin:0 0 14px}
+ .row{display:flex;gap:10px;align-items:center;margin:10px 0}
+ .row>input{flex:1}
+ .row>.btn{flex:none}
+ .url{display:flex;align-items:center;gap:8px;margin:10px 0;
+  background:var(--field);border-radius:10px;padding:10px 14px;font-size:14px}
+ .url code{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:13px;
+  word-break:break-all;flex:1;user-select:all}
+ .kv{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:10px 0}
+ .kv+.kv{border-top:1px solid var(--hair)}
+ .kv .k{color:var(--text2);font-size:13px;flex:none}
+ .kv .v{font-size:14px;text-align:right;word-break:break-all}
+ label{display:block;font-size:13px;font-weight:600;color:var(--text2);margin:14px 0 6px}
+ input{width:100%;background:var(--field);border:none;outline:none;color:var(--text);
+  border-radius:10px;padding:10px 14px;font-size:15px;font-family:inherit;
+  transition:box-shadow .15s}
+ input:focus{box-shadow:0 0 0 3.5px color-mix(in srgb,var(--accent) 35%,transparent)}
+ button{font-family:inherit;cursor:pointer;border:none;border-radius:980px;
+  padding:9px 18px;font-size:14px;font-weight:600;letter-spacing:-.005em;
+  background:var(--accent);color:#fff;transition:background .15s,opacity .15s,transform .1s}
+ button:active{opacity:.8;transform:scale(.98)}
+ button.plain{background:var(--chip);color:var(--text)}
+ button.small{padding:6px 13px;font-size:13px}
+ button:disabled{opacity:.45;cursor:default}
+ .chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600}
+ .chip .dot{width:7px;height:7px}
+ .chip.no .dot{background:var(--bad)}
+ .chip.ok{color:var(--text)}
+ .chip.no{color:var(--text)}
+ #pairCard{border:1.5px solid var(--accent)}
+ #pairCard .who{font-size:15px;font-weight:600;margin:12px 0 2px}
+ #pairCard .meta{color:var(--text2);font-size:13px;margin-bottom:16px}
+ .pair-actions{display:flex;gap:10px}
+ .pair-actions button{flex:1;padding:11px 0}
+ .pair-actions button.plain{flex:0 0 96px}
+ #devices:empty::after{content:"暂无已配对设备";color:var(--text2);font-size:13px}
+ .device{display:inline-flex;align-items:center;gap:7px;background:var(--chip);
+  border-radius:980px;padding:5px 14px;font-size:13px;margin:4px 6px 0 0}
+ #log{background:var(--field);border-radius:10px;height:200px;overflow:auto;padding:12px 14px;
+  font:12px/1.6 ui-monospace,"SF Mono",Menlo,Consolas,monospace;white-space:pre-wrap;color:var(--text2)}
+ #toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%) translateY(20px);
+  background:rgba(29,29,31,.92);color:#fff;font-size:14px;padding:10px 22px;border-radius:980px;
+  opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;max-width:86%}
+ #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+ @media (prefers-color-scheme:dark){ #toast{background:rgba(245,245,247,.92);color:#1d1d1f} }
 </style></head><body>
-<h1>mibackpc · <span>电脑备份接收器</span></h1>
-<div class="card">
- <div class="url">局域网（手机与电脑同一 WiFi）：<code id="lanURL">…</code></div>
- <div class="url">USB（需数据线 + 已开 USB 调试）：<code id="adbURL">…</code> <span id="adbState"></span></div>
- <div class="url">账号：<code id="cred">…</code></div>
- <div>手机端：备份页 → 备份到电脑 → 填上方地址 → 测试并保存 → 开始备份</div>
+<div class="wrap">
+ <header>
+  <div><h1>mibackpc</h1><p class="sub">电脑备份接收器 · 局域网自动发现</p></div>
+  <span class="badge"><span class="dot"></span>运行中</span>
+ </header>
+
+ <div class="card" id="pairCard" hidden>
+  <h2>连接请求</h2>
+  <p class="hint">一台手机请求备份到这台电脑，请确认是否允许。</p>
+  <div class="who" id="pairWho">—</div>
+  <div class="meta" id="pairMeta"></div>
+  <div class="pair-actions">
+   <button class="plain" onclick="decide(false)">拒绝</button>
+   <button onclick="decide(true)">允许</button>
+  </div>
+ </div>
+
+ <div class="card">
+  <h2>连接</h2>
+  <p class="hint">手机端在「备份」页自动发现本机并请求连接，无需手动填写地址。</p>
+  <div id="lanURLs"></div>
+  <div class="url"><code id="adbURL">…</code>
+   <span class="chip" id="adbState"></span>
+   <button class="small plain" onclick="doAdb()">重连</button></div>
+  <p class="hint" style="margin:10px 0 0">USB 通道需要数据线连接且电脑已安装 adb；手机与电脑同一 WiFi 时走局域网。</p>
+ </div>
+
+ <div class="card">
+  <h2>设置</h2>
+  <label>备份落地目录</label>
+  <div class="row"><input id="root"><button class="plain" onclick="setRoot()">保存</button></div>
+  <label>WebDAV 账号</label>
+  <div class="row"><input id="user" autocomplete="off"><input id="pass" autocomplete="off"><button class="plain" onclick="setCred()">更新</button></div>
+ </div>
+
+ <div class="card">
+  <h2>已配对设备</h2>
+  <p class="hint">配对成功的手机会记录在这里（本地留存，仅展示）。</p>
+  <div id="devices"></div>
+ </div>
+
+ <div class="card">
+  <h2>传输日志</h2>
+  <div id="log"></div>
+ </div>
 </div>
-<div class="card">
- <label>备份落地目录</label>
- <div class="row"><div><input id="root"></div><button onclick="setRoot()">保存</button></div>
- <label>WebDAV 账号 / 密码</label>
- <div class="row"><div><input id="user"></div><div><input id="pass"></div><button onclick="setCred()">更新</button></div>
- <label>USB 通道（需要电脑已安装 adb 并连接手机）</label>
- <button class="gray" onclick="doAdb()">重新建立 adb reverse</button>
-</div>
-<div class="card"><label>传输日志</label><div id="log"></div></div>
+<div id="toast"></div>
 <script>
 const esc = s => (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
+let lastPair = "";
+function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.add("show");
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),2200); }
+async function copy(text){ try{ await navigator.clipboard.writeText(text); toast("已拷贝"); }
+  catch(e){ toast(text); } }
 async function refresh(){
   const st = await (await fetch("/api/state")).json();
   document.getElementById("root").value = st.root || "";
   document.getElementById("user").value = st.user || "";
   document.getElementById("pass").value = st.pass || "";
-  document.getElementById("lanURL").textContent = (st.lanIPs||[]).map(ip => "http://"+ip+":"+st.port+"/dav/").join("  或  ") || "未检测到局域网 IP";
+  const ips = st.lanIPs || [];
+  document.getElementById("lanURLs").innerHTML = ips.length
+    ? ips.map(ip => '<div class="url"><code>http://'+esc(ip)+':'+st.port+'/dav/</code>'+
+        '<button class="small plain" onclick="copy(this.previousElementSibling.textContent)">拷贝</button></div>').join("")
+    : '<div class="url"><code>未检测到局域网 IP，请确认已连接 WiFi/网线</code></div>';
   document.getElementById("adbURL").textContent = st.adbURL;
-  document.getElementById("adbState").innerHTML = st.adbOK ? '<span class="ok">已建立</span>' : '<span class="no">未建立</span>';
-  document.getElementById("cred").textContent = st.user + " / " + st.pass;
+  const s = document.getElementById("adbState");
+  s.className = "chip " + (st.adbOK ? "ok" : "no");
+  s.innerHTML = '<span class="dot"></span>' + (st.adbOK ? "已建立" : "未建立");
+  const dv = document.getElementById("devices");
+  dv.innerHTML = (st.pairedDevices||[]).map(d => '<span class="device"><span class="dot"></span>'+esc(d)+"</span>").join("");
+  const p = st.pairPending;
+  const card = document.getElementById("pairCard");
+  if (p) {
+    const sig = p.device + "|" + p.ip;
+    card.hidden = false;
+    if (sig !== lastPair) { lastPair = sig; }
+    document.getElementById("pairWho").textContent = "手机 · " + p.device;
+    document.getElementById("pairMeta").textContent = p.ip + " · 等待确认 " + p.age + " 秒";
+  } else { card.hidden = true; lastPair = ""; }
 }
 async function poll(){
   const j = await (await fetch("/api/log")).json();
-  document.getElementById("log").textContent = (j.lines||[]).join("\n");
+  const el = document.getElementById("log");
+  el.textContent = (j.lines||[]).join("\n");
+  el.scrollTop = el.scrollHeight;
 }
-async function setRoot(){ const r = await fetch("/api/root",{method:"POST",body:JSON.stringify({root:document.getElementById("root").value})}); if(!r.ok) alert(await r.text()); refresh(); }
-async function setCred(){ const r = await fetch("/api/cred",{method:"POST",body:JSON.stringify({user:document.getElementById("user").value,pass:document.getElementById("pass").value})}); if(!r.ok) alert(await r.text()); refresh(); }
+async function decide(ok){
+  await fetch("/api/pair/decide",{method:"POST",body:JSON.stringify({approve:ok})});
+  toast(ok ? "已允许连接" : "已拒绝连接");
+  refresh();
+}
+async function setRoot(){ const r = await fetch("/api/root",{method:"POST",body:JSON.stringify({root:document.getElementById("root").value})}); if(!r.ok) toast(await r.text()); else toast("已保存"); refresh(); }
+async function setCred(){ const r = await fetch("/api/cred",{method:"POST",body:JSON.stringify({user:document.getElementById("user").value,pass:document.getElementById("pass").value})}); if(!r.ok) toast(await r.text()); else toast("已更新"); refresh(); }
 async function doAdb(){ await fetch("/api/adb",{method:"POST"}); refresh(); }
-refresh(); poll(); setInterval(poll,2000);
+refresh(); poll(); setInterval(refresh,1200); setInterval(poll,2000);
 </script></body></html>`
 
 // ---------- 入口 ----------
@@ -641,7 +1008,14 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/dav/", func(w http.ResponseWriter, r *http.Request) { davHandler(w, r, c) })
 	mux.HandleFunc("/dav", func(w http.ResponseWriter, r *http.Request) { davHandler(w, r, c) })
+	// 手机端自动发现：USB 通道（adb reverse 后手机访问 127.0.0.1）也走这里探测
+	mux.HandleFunc("/miback/info", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write(discoverPayload(c))
+	})
+	mux.HandleFunc("/pair/", func(w http.ResponseWriter, r *http.Request) { pairHandler(w, r, c) })
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { controlHandler(w, r, c) })
+	go serveDiscovery(c)
 
 	addr := ":" + strconv.Itoa(c.Port)
 	logf("mibackpc 启动：端口 %d，备份目录 %s", c.Port, rootDir)

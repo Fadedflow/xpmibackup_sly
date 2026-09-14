@@ -62,6 +62,22 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="@dimen/space_32"
                     android:text="@string/backup_method_cloud_hint" />
+
+                <!-- 备份至 PC：连接成功后出现（扫描发现 → 电脑端确认配对） -->
+                <RadioButton
+                    android:id="@+id/rb_pc"
+                    style="@style/XmRadio"
+                    android:visibility="gone"
+                    android:text="@string/backup_method_pc" />
+
+                <TextView
+                    android:id="@+id/rb_pc_hint"
+                    style="@style/XmTextCaption"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/space_32"
+                    android:visibility="gone"
+                    android:text="@string/backup_method_pc_hint" />
             </RadioGroup>
 
             <!-- NAS 备份方案选择 -->
@@ -115,6 +131,29 @@
                     android:layout_marginTop="@dimen/space_8"
                     android:text="@string/cloud_transfer_coming_soon" />
             </LinearLayout>
+
+            <!-- 备份至 PC：连接状态与重新扫描 -->
+            <LinearLayout
+                android:id="@+id/panel_pc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:paddingTop="@dimen/space_16">
+
+                <TextView
+                    android:id="@+id/tv_pc_status"
+                    style="@style/XmTextCaption"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/space_8"
+                    android:text="@string/pc_status_scanning" />
+
+                <Button
+                    android:id="@+id/btn_pc_rescan"
+                    style="@style/XmButtonSecondary"
+                    android:text="@string/pc_rescan" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- Root 模块备份：打包 Magisk/KernelSU/APatch 模块目录并入本次备份 -->
@@ -138,25 +177,11 @@
             style="@style/XmButtonPrimary"
             android:text="@string/start_backup" />
 
-        <!-- 备份到电脑：mibackpc（WebDAV 接收器）快速配置入口 -->
-        <Button
-            android:id="@+id/btn_pc_backup"
-            style="@style/XmButtonSecondary"
-            android:layout_marginTop="@dimen/space_12"
-            android:text="@string/pc_backup" />
-
         <!-- 恢复 Root 模块：从快照解包回 /data/adb -->
         <Button
             android:id="@+id/btn_restore_modules"
             style="@style/XmButtonSecondary"
             android:layout_marginTop="@dimen/space_12"
             android:text="@string/restore_modules_btn" />
-
-        <TextView
-            style="@style/XmTextCaption"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/space_8"
-            android:text="@string/pc_backup_hint" />
     </LinearLayout>
 </ScrollView>
