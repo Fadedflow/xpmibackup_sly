@@ -1,16 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 输入框：中性填充，聚焦时出现品牌色描边环（交互反馈走描边而非换色） -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_focused="true">
         <shape android:shape="rectangle">
             <solid android:color="@color/input_bg" />
-            <stroke android:width="1.5dp" android:color="@color/primary" />
-            <corners android:radius="10dp" />
+            <stroke
+                android:width="1.5dp"
+                android:color="@color/brand" />
+            <corners android:radius="@dimen/radius_input" />
         </shape>
     </item>
     <item>
         <shape android:shape="rectangle">
             <solid android:color="@color/input_bg" />
-            <corners android:radius="10dp" />
+            <corners android:radius="@dimen/radius_input" />
         </shape>
     </item>
 </selector>

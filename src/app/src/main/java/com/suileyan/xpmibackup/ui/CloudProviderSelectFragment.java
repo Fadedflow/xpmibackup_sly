@@ -60,7 +60,7 @@ public class CloudProviderSelectFragment extends Fragment {
     }
 
     /**
-     * 构造单个网盘卡片行
+     * 构造单个网盘卡片行（尺寸/间距按 8pt 栅格与圆角阶梯取值）
      */
     private View createProviderRow(int iconRes, String name, String hint, View.OnClickListener listener) {
         var row = new LinearLayout(getActivity());
@@ -69,18 +69,18 @@ public class CloudProviderSelectFragment extends Fragment {
         row.setBackgroundResource(R.drawable.bg_card);
         row.setClickable(true);
         row.setFocusable(true);
-        row.setPadding(dp(14), dp(12), dp(12), dp(12));
+        row.setPadding(dp(16), dp(12), dp(12), dp(12));
         var rowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        rowLp.bottomMargin = dp(10);
+        rowLp.bottomMargin = dp(12);
         row.setLayoutParams(rowLp);
         row.setOnClickListener(listener);
 
         var icon = new ImageView(getActivity());
         icon.setImageResource(iconRes);
-        icon.setColorFilter(getResources().getColor(R.color.primary));
+        icon.setColorFilter(getResources().getColor(R.color.brand));
         icon.setBackgroundResource(R.drawable.bg_account_icon);
-        icon.setPadding(dp(8), dp(8), dp(8), dp(8));
-        var iconLp = new LinearLayout.LayoutParams(dp(42), dp(42));
+        icon.setPadding(dp(10), dp(10), dp(10), dp(10));
+        var iconLp = new LinearLayout.LayoutParams(dp(44), dp(44));
         iconLp.setMarginEnd(dp(12));
         icon.setLayoutParams(iconLp);
         row.addView(icon);
@@ -106,10 +106,12 @@ public class CloudProviderSelectFragment extends Fragment {
 
         row.addView(info);
 
+        // 右侧指示箭头：非交互装饰，标记为对无障碍不可见
         var arrow = new TextView(getActivity());
         arrow.setText("›");
-        arrow.setTextSize(22f);
-        arrow.setTextColor(getResources().getColor(R.color.text_hint));
+        arrow.setTextSize(20f);
+        arrow.setTextColor(getResources().getColor(R.color.text_tertiary));
+        arrow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         row.addView(arrow);
 
         return row;

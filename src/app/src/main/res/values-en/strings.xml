@@ -12,6 +12,7 @@
     <string name="action_backup">Backup</string>
     <string name="settings_title">Settings</string>
     <string name="about_title">About</string>
+    <string name="more_menu">More</string>
     <string name="theme_mode">App theme</string>
     <string name="theme_system">Follow system</string>
     <string name="theme_day">Day</string>
@@ -142,6 +143,7 @@
     <string name="webview_login_tip">Log in on the page, then tap "Done" in the top-right corner.</string>
     <string name="toast_webview_no_auth">No login info detected. Please finish login and try again.</string>
 
+    <string name="device_info_section">Device</string>
     <string name="device_name">Device name</string>
     <string name="device_name_hint">Example: Remote backup device</string>
     <string name="device_description">Device description</string>

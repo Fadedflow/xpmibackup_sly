@@ -1,31 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 网盘选择页（overlay 二级页面）：列表行由代码动态构建 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/background"
-    android:padding="16dp">
+    android:background="@color/background">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/title_cloud_provider_select"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:textColor="@color/text_primary"
-        android:layout_marginStart="8dp"
-        android:layout_marginBottom="16dp" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/top_bar_height"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="@dimen/space_20"
+        android:paddingEnd="@dimen/space_8">
+
+        <TextView
+            style="@style/XmTextPageTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/title_cloud_provider_select" />
+    </LinearLayout>
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:scrollbars="none">
 
         <LinearLayout
             android:id="@+id/provider_list"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingBottom="16dp" />
+            android:paddingStart="@dimen/page_padding_h"
+            android:paddingEnd="@dimen/page_padding_h"
+            android:paddingBottom="@dimen/page_padding_bottom" />
     </ScrollView>
 </LinearLayout>

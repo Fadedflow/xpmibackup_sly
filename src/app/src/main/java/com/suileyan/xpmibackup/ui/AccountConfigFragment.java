@@ -90,23 +90,24 @@ public class AccountConfigFragment extends Fragment {
 
     /**
      * 构造单条云盘账号卡片行：类型图标 + 名称 + 删除按钮
+     * 尺寸/间距按 8pt 栅格与圆角阶梯取值（见 res/values/dimens.xml）
      */
     private View createAccountRow(CloudAccount account) {
         var row = new LinearLayout(getActivity());
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setBackgroundResource(R.drawable.bg_card);
-        row.setPadding(dp(14), dp(12), dp(10), dp(12));
+        row.setPadding(dp(16), dp(14), dp(12), dp(14));
         var rowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        rowLp.bottomMargin = dp(10);
+        rowLp.bottomMargin = dp(12);
         row.setLayoutParams(rowLp);
 
         var icon = new ImageView(getActivity());
         icon.setImageResource(R.drawable.ic_tab_cloud);
-        icon.setColorFilter(getResources().getColor(R.color.primary));
+        icon.setColorFilter(getResources().getColor(R.color.icon_on_tile));
         icon.setBackgroundResource(R.drawable.bg_account_icon);
-        icon.setPadding(dp(8), dp(8), dp(8), dp(8));
-        var iconLp = new LinearLayout.LayoutParams(dp(42), dp(42));
+        icon.setPadding(dp(10), dp(10), dp(10), dp(10));
+        var iconLp = new LinearLayout.LayoutParams(dp(44), dp(44));
         iconLp.setMarginEnd(dp(12));
         icon.setLayoutParams(iconLp);
         row.addView(icon);
@@ -138,7 +139,7 @@ public class AccountConfigFragment extends Fragment {
 
         // 凭证状态行：异步检查后显示"有效/失效需重新登录/网络异常"（凭证预处理，NEW-H-04）
         var statusText = new TextView(getActivity());
-        statusText.setTextSize(11f);
+        statusText.setTextSize(12f);
         statusText.setTextColor(getResources().getColor(R.color.text_secondary));
         statusText.setPadding(0, dp(2), 0, 0);
         info.addView(statusText);
@@ -153,12 +154,14 @@ public class AccountConfigFragment extends Fragment {
 
         var btnRelogin = new Button(getActivity());
         btnRelogin.setText(R.string.relogin_account);
-        btnRelogin.setTextSize(11f);
+        btnRelogin.setTextSize(12f);
         btnRelogin.setAllCaps(false);
-        btnRelogin.setTextColor(getResources().getColor(R.color.primary_text_on));
+        btnRelogin.setTextColor(getResources().getColor(R.color.text_on_brand));
         btnRelogin.setBackgroundResource(R.drawable.bg_button_primary);
-        btnRelogin.setPadding(dp(12), 0, dp(12), 0);
-        var reloginLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34));
+        btnRelogin.setPadding(dp(14), 0, dp(14), 0);
+        btnRelogin.setMinWidth(0);
+        btnRelogin.setMinimumWidth(0);
+        var reloginLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36));
         reloginLp.setMarginEnd(dp(8));
         btnRelogin.setLayoutParams(reloginLp);
         // 初始隐藏：仅在凭证失效/建议重新登录时显示
@@ -168,12 +171,14 @@ public class AccountConfigFragment extends Fragment {
 
         var btnDelete = new Button(getActivity());
         btnDelete.setText(R.string.delete_account);
-        btnDelete.setTextSize(11f);
+        btnDelete.setTextSize(12f);
         btnDelete.setAllCaps(false);
-        btnDelete.setTextColor(getResources().getColor(R.color.primary_text_on));
+        btnDelete.setTextColor(getResources().getColor(R.color.text_on_brand));
         btnDelete.setBackgroundResource(R.drawable.bg_button_danger);
-        btnDelete.setPadding(dp(12), 0, dp(12), 0);
-        btnDelete.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34)));
+        btnDelete.setPadding(dp(14), 0, dp(14), 0);
+        btnDelete.setMinWidth(0);
+        btnDelete.setMinimumWidth(0);
+        btnDelete.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)));
         btnDelete.setOnClickListener(v -> deleteAccount(account));
         btnArea.addView(btnDelete);
 

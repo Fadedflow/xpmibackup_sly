@@ -530,8 +530,8 @@ public class ServiceConfigFragment extends Fragment {
         tabCustom.setBackgroundResource(custom ? R.drawable.bg_tab_selected : R.drawable.bg_tab_normal);
         containerNas.setVisibility(custom ? View.GONE : View.VISIBLE);
         containerCustom.setVisibility(custom ? View.VISIBLE : View.GONE);
-        tabNas.setTextColor(getResources().getColor(custom ? R.color.text_disabled : R.color.primary_text_on));
-        tabCustom.setTextColor(getResources().getColor(custom ? R.color.primary_text_on : R.color.text_disabled));
+        tabNas.setTextColor(getResources().getColor(custom ? R.color.text_secondary : R.color.brand));
+        tabCustom.setTextColor(getResources().getColor(custom ? R.color.brand : R.color.text_secondary));
         // 「如何自定义脚本」链接仅自定义配置选项卡显示（NAS 选项卡无脚本上下文）
         tvScriptHelp.setVisibility(custom ? View.VISIBLE : View.GONE);
         // 配置名称联动：自定义页标签/hint 改为脚本方案提示，NAS 页恢复通用（用户明确知道在命名哪类配置）
@@ -582,16 +582,18 @@ public class ServiceConfigFragment extends Fragment {
             label.setText(name);
             label.setTextSize(13f);
             label.setTextColor(getResources().getColor(R.color.text_secondary));
+            label.setPadding(0, 0, 0, dp(6));
             row.addView(label);
 
             var et = new EditText(getActivity());
             et.setId(R.id.et_script_var);
             et.setSingleLine(true);
-            et.setTextSize(14f);
+            et.setTextSize(15f);
             et.setTextColor(getResources().getColor(R.color.text_primary));
             et.setHintTextColor(getResources().getColor(R.color.text_hint));
             et.setBackgroundResource(R.drawable.bg_input);
-            et.setPadding(dp(12), dp(8), dp(12), dp(8));
+            et.setPadding(dp(12), dp(12), dp(12), dp(12));
+            et.setMinHeight(dp(48));
             // 已填值优先；否则回填加密存储中的旧值（加载方案场景）
             var value = current.containsKey(name) ? current.get(name)
                     : EncryptedCredStore.get(editingProfileId, "script_var_" + name);
@@ -599,7 +601,7 @@ public class ServiceConfigFragment extends Fragment {
             et.setText(value);
             var lp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            lp.bottomMargin = dp(16);
+            lp.bottomMargin = dp(12);
             row.addView(et, lp);
             containerScriptVars.addView(row);
         }

@@ -402,6 +402,17 @@ public class BackupFragment extends Fragment {
         passInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT
                 | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
 
+        // 对话框内输入框统一按设计令牌着色/圆角（Dialog 使用独立 Context，
+        // 此处显式套用 bg_input 与文字层级，保证与页面内输入框观感一致）
+        for (var input : new EditText[]{addrInput, userInput, passInput}) {
+            input.setTextSize(15f);
+            input.setTextColor(ctx.getResources().getColor(R.color.text_primary));
+            input.setHintTextColor(ctx.getResources().getColor(R.color.text_hint));
+            input.setBackgroundResource(R.drawable.bg_input);
+            input.setPadding(dp(12), dp(12), dp(12), dp(12));
+            input.setMinHeight(dp(48));
+        }
+
         var box = new LinearLayout(ctx);
         box.setOrientation(LinearLayout.VERTICAL);
         int pad = dp(20);
@@ -521,9 +532,9 @@ public class BackupFragment extends Fragment {
     private TextView label(android.content.Context ctx, int resId) {
         var tv = new TextView(ctx);
         tv.setText(resId);
-        tv.setTextSize(12);
+        tv.setTextSize(13);
         tv.setTextColor(ctx.getColor(R.color.text_secondary));
-        tv.setPadding(0, dp(10), 0, dp(2));
+        tv.setPadding(0, dp(10), 0, dp(6));
         return tv;
     }
 

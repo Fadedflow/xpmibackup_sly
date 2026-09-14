@@ -32,9 +32,33 @@ public class MainActivity extends Activity {
     private static final int TAB_COUNT = TAB_NAMES.length;
     private static final long SLIDE_MS = 280;
 
-    /** 底部Tab图标和文字控件，用于切换时更新选中/未选中颜色 */
-    private ImageView tabDeviceIcon, tabServiceIcon, tabAccountIcon, tabBackupIcon;
-    private TextView tabDeviceText, tabServiceText, tabAccountText, tabBackupText;
+    /** 顶栏标题文案（与 TAB_NAMES 一一对应） */
+    private static final int[] TAB_TITLE_RES = {
+            R.string.title_device_config, R.string.title_service_config,
+            R.string.title_account_config, R.string.title_backup_config};
+    /** 核心操作 Tab（备份）：图标常驻品牌色实心圆高亮，与其余导航项区分 */
+    private static final int CORE_TAB = 3;
+    /** 大屏横屏下切换为侧边导航栏的宽度断点（官方大屏 L2：宽屏用导航栏/抽屉取代底部导航条） */
+    private static final int RAIL_BREAKPOINT_DP = 840;
+
+    /** 悬浮底栏 4 个导航项（顺序与 TAB_NAMES 一致）：项容器 / 图标底板 / 图标 / 文字 */
+    private View[] navItems;
+    private View[] navIconBoxes;
+    private ImageView[] navIcons;
+    private TextView[] navTexts;
+
+    /** 悬浮底栏容器、底部留白、侧边导航栏占位（大屏横屏）、顶栏标题 */
+    private View floatingBar;
+    private View bottomSpacer;
+    private View navRailSpacer;
+    private TextView tvTopTitle;
+
+    /** 底栏当前是否可见（overlay 二级页面打开时收起，让二级页面铺满内容区） */
+    private boolean barVisible = true;
+    /** 导航栏底部 inset 缓存（Android 15+ 强制 edge-to-edge） */
+    private int navBottomInset = 0;
+    /** 大屏横屏：底部导航条切换为侧边导航栏 */
+    private boolean railMode = false;
 
     private android.widget.FrameLayout tabContainer;
     private android.widget.FrameLayout overlayContainer;
@@ -56,6 +80,8 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         // 启动耗时诊断（STARTUP 日志）：定位黑屏/卡顿阶段
         var startupT0 = System.currentTimeMillis();
+        // 崩溃落盘：必须在任何业务代码之前安装，否则崩溃点之前的异常会被系统默认处理器吞掉
+        com.suileyan.comm.CrashLog.install(this);
         super.onCreate(savedInstanceState);
         // 恢复主题切换重建前的 Tab 位置（切主题后停留在原页面，不回到设备配置页）
         if (savedInstanceState != null) {
@@ -75,29 +101,61 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
         com.suileyan.comm.LogHelp.i("XpMiBackup", "STARTUP setContentView done: " + (System.currentTimeMillis() - startupT0) + "ms");
 
-        tabDeviceIcon = findViewById(R.id.tab_device_icon);
-        tabDeviceText = findViewById(R.id.tab_device_text);
-        tabServiceIcon = findViewById(R.id.tab_service_icon);
-        tabServiceText = findViewById(R.id.tab_service_text);
-        tabAccountIcon = findViewById(R.id.tab_account_icon);
-        tabAccountText = findViewById(R.id.tab_account_text);
-        tabBackupIcon = findViewById(R.id.tab_backup_icon);
-        tabBackupText = findViewById(R.id.tab_backup_text);
+        tvTopTitle = findViewById(R.id.tv_top_title);
+        floatingBar = findViewById(R.id.tab_bar_container);
+        bottomSpacer = findViewById(R.id.bottom_spacer);
+        navRailSpacer = findViewById(R.id.nav_rail_spacer);
+
+        int[] itemIds = {R.id.tab_device, R.id.tab_service, R.id.tab_account, R.id.tab_backup};
+        int[] boxIds = {R.id.tab_device_icon_box, R.id.tab_service_icon_box,
+                R.id.tab_account_icon_box, R.id.tab_backup_icon_box};
+        int[] iconIds = {R.id.tab_device_icon, R.id.tab_service_icon,
+                R.id.tab_account_icon, R.id.tab_backup_icon};
+        int[] textIds = {R.id.tab_device_text, R.id.tab_service_text,
+                R.id.tab_account_text, R.id.tab_backup_text};
+        navItems = new View[TAB_COUNT];
+        navIconBoxes = new View[TAB_COUNT];
+        navIcons = new ImageView[TAB_COUNT];
+        navTexts = new TextView[TAB_COUNT];
+        for (var i = 0; i < TAB_COUNT; i++) {
+            navItems[i] = findViewById(itemIds[i]);
+            navIconBoxes[i] = findViewById(boxIds[i]);
+            navIcons[i] = findViewById(iconIds[i]);
+            navTexts[i] = findViewById(textIds[i]);
+            final var index = i;
+            navItems[i].setOnClickListener(v -> switchTabByIndex(index));
+            // 按下反馈：图标底板轻微缩放（只动合成层，不掉帧）+ ripple 光效；
+            // 返回 false 不消费事件，点击仍交给 OnClickListener
+            navItems[i].setOnTouchListener((v, event) -> {
+                switch (event.getActionMasked()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        pressFeedback(navIconBoxes[index], true);
+                        break;
+                    case android.view.MotionEvent.ACTION_UP:
+                    case android.view.MotionEvent.ACTION_CANCEL:
+                        pressFeedback(navIconBoxes[index], false);
+                        break;
+                    default:
+                        break;
+                }
+                return false;
+            });
+        }
+
         tabContainer = findViewById(R.id.fragment_container);
         overlayContainer = findViewById(R.id.overlay_container);
 
-        findViewById(R.id.tab_device).setOnClickListener(v -> switchTabByIndex(0));
-        findViewById(R.id.tab_service).setOnClickListener(v -> switchTabByIndex(1));
-        findViewById(R.id.tab_account).setOnClickListener(v -> switchTabByIndex(2));
-        findViewById(R.id.tab_backup).setOnClickListener(v -> switchTabByIndex(3));
         // 顶部菜单：设置 / 关于
         findViewById(R.id.btn_top_menu).setOnClickListener(v -> showTopMenu());
 
-        // 二级页面返回栈清空后隐藏 overlay 层
+        // 二级页面返回栈变化：控制 overlay 层显隐，并同步收起/展开悬浮底栏
         getFragmentManager().addOnBackStackChangedListener(() -> {
-            if (getFragmentManager().getBackStackEntryCount() == 0 && overlayContainer != null) {
-                overlayContainer.setVisibility(View.GONE);
+            var depth = getFragmentManager().getBackStackEntryCount();
+            if (overlayContainer != null) {
+                overlayContainer.setVisibility(depth == 0 ? View.GONE : View.VISIBLE);
             }
+            // 二级页面铺满内容区，同时释放底栏留白
+            setFloatingBarVisible(depth == 0);
         });
 
         // 状态栏占位：仅 Android 15+（targetSdk 35+ 强制 edge-to-edge）需要，
@@ -110,9 +168,10 @@ public class MainActivity extends Activity {
             }
         }
 
-        // Android 15+ 强制 edge-to-edge（targetSdk 35+，Android 9~17 适配 HIGH-24）：
-        // 窗口默认延伸至系统栏区域，底部 Tab 栏需按导航栏 inset 补 padding，避免被手势条/三键导航遮挡
-        applyEdgeToEdgeInsets();
+        // 响应式布局：大屏最大宽度约束 + （大屏横屏）侧边导航栏
+        applyResponsiveLayout();
+        // Android 15+ 强制 edge-to-edge：悬浮底栏按导航栏 inset 抬升，避免被手势条遮挡
+        applyFloatingBarInsets();
 
         // 检查文件管理权限，未授权则跳转系统设置页面
         if (!Environment.isExternalStorageManager()) {
@@ -126,6 +185,7 @@ public class MainActivity extends Activity {
         com.suileyan.comm.LogHelp.i("XpMiBackup", "STARTUP initTabs done: " + (System.currentTimeMillis() - startupT0) + "ms");
         // 高亮当前 Tab（主题切换重建后恢复上次位置，不强制回设备配置页）
         updateTabSelection(TAB_NAMES[currentIndex]);
+        LogHelp.i("XpMiBackup", "STARTUP step: updateTabSelection ok");
         // 主题切换重建：窗口淡入过渡 + 恢复设置页
         if (themeTransition) {
             themeTransition = false;
@@ -134,14 +194,19 @@ public class MainActivity extends Activity {
             decor.animate().alpha(1f).setDuration(350).start();
             tabContainer.post(() -> openOverlay(new com.suileyan.xpmibackup.ui.SettingsFragment()));
         }
+        LogHelp.i("XpMiBackup", "STARTUP step: themeTransition ok");
         // 全面屏手势返回：API 33+ 注册 OnBackInvokedCallback（按设置开关启用/关闭预测动画）
         updateBackInvoke();
+        LogHelp.i("XpMiBackup", "STARTUP step: updateBackInvoke ok");
         // 凭据库后台预热：PBKDF2 600000 迭代迁移较重，异步执行避免主线程阻塞（启动黑屏优化）
         com.suileyan.cloud.EncryptedCredStore.warmUp();
+        LogHelp.i("XpMiBackup", "STARTUP step: credStore warmUp queued");
         // 仅应用进入时自动检测一次版本（设置页可关闭，弹小窗可点空白取消）
         checkUpdatesOnLaunch();
+        LogHelp.i("XpMiBackup", "STARTUP step: checkUpdates queued");
         // 首次启动免责声明（3 秒倒计时后才能点同意）
         maybeShowDisclaimer();
+        LogHelp.i("XpMiBackup", "STARTUP step: onCreate END");
     }
 
     /** 首次启动免责声明：不可取消，同意按钮 3 秒倒计时后可点 */
@@ -308,34 +373,242 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * edge-to-edge 底部适配（Android 15+ 强制，HIGH-24）：
-     * targetSdk 35+ 窗口延伸至导航栏区域，Tab 栏需「加高 + 补 bottom padding」，
-     * 内容区仍保持 64dp，导航栏 inset 区域只垫背景色——否则 64dp 容器被 inset 挤压，
-     * Tab 图标/文字溢出屏幕底被裁掉（v0.9.1 真机回归在 warsaw/Android 17 实测发现）。
-     * 必须绝对值赋值：insets 可能多次派发，"+ bottom" 累加会让 padding/高度持续膨胀。
-     * Android 11~14 无强制 edge-to-edge（窗口本就在导航栏上方，insets.bottom=0），不处理。
+     * edge-to-edge 底部适配（Android 15+ 强制，HIGH-24 / UI 重构）：
+     * targetSdk 35+ 窗口延伸至导航栏区域。悬浮底栏不再靠「加高容器」吸收 inset，
+     * 而是把 inset 折算成底栏的底部外边距——底栏整体抬高，形状保持 64dp 不被拉伸；
+     * 内容区底部留白同步增加同样数值，避免内容被抬升后的底栏压住。
+     * 绝对值赋值：insets 会多次派发，「+= 」累加会让边距持续膨胀。
+     * Android 11~14 无强制 edge-to-edge（窗口本就在导航栏上方，insets.bottom=0）。
      */
-    private void applyEdgeToEdgeInsets() {
-        if (Build.VERSION.SDK_INT < 35) return;
+    private void applyFloatingBarInsets() {
+        if (Build.VERSION.SDK_INT < 35) {
+            applyClearance();
+            return;
+        }
         try {
-            var tabBar = findViewById(R.id.tab_bar_container);
-            tabBar.setOnApplyWindowInsetsListener((v, insets) -> {
-                var bottom = insets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom;
-                var dm = v.getResources().getDisplayMetrics();
-                int base = Math.round(64 * dm.density); // activity_main.xml 中 tab_bar_container 的固定高度
-                if (v.getPaddingBottom() != bottom) {
-                    v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(), bottom);
-                }
-                var lp = v.getLayoutParams();
-                if (lp != null && lp.height != base + bottom) {
-                    lp.height = base + bottom;
-                    v.setLayoutParams(lp);
-                }
+            var column = findViewById(R.id.content_column);
+            column.setOnApplyWindowInsetsListener((v, insets) -> {
+                navBottomInset = insets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom;
+                applyClearance();
                 return insets;
             });
-            tabBar.requestApplyInsets();
+            column.requestApplyInsets();
         } catch (Throwable e) {
             com.suileyan.comm.LogHelp.w("XpMiBackup", "apply edge-to-edge insets failed", e);
+        }
+        applyClearance();
+    }
+
+    /**
+     * 统一维护「内容让位」尺寸：
+     * · 手机/竖屏——底栏悬浮于底部，内容区底部留白 = 96dp + 导航栏 inset（底栏自身底部外边距同步抬升）
+     * · 大屏横屏——底栏变侧边导航栏，底部留白归零，改为内容区左侧留白
+     * · overlay 二级页面打开（底栏收起）——留白全部归零，二级页面铺满内容区
+     */
+    private void applyClearance() {
+        if (bottomSpacer == null || navRailSpacer == null) return;
+        var bottom = 0;
+        var start = 0;
+        if (barVisible) {
+            if (railMode) {
+                start = getResources().getDimensionPixelSize(R.dimen.nav_rail_clearance);
+            } else {
+                bottom = getResources().getDimensionPixelSize(R.dimen.floating_bar_clearance) + navBottomInset;
+            }
+        }
+        setViewHeight(bottomSpacer, bottom);
+        setViewWidth(navRailSpacer, start);
+
+        if (floatingBar != null && !railMode) {
+            var lp = floatingBar.getLayoutParams();
+            if (lp instanceof android.view.ViewGroup.MarginLayoutParams mlp) {
+                var target = getResources().getDimensionPixelSize(R.dimen.floating_bar_margin_bottom) + navBottomInset;
+                if (mlp.bottomMargin != target) {
+                    mlp.bottomMargin = target;
+                    floatingBar.setLayoutParams(mlp);
+                }
+            }
+        }
+    }
+
+    /**
+     * 响应式适配（官方大屏体验标准 L2）：
+     * · 宽屏（≥ content_max_width）——内容列与底栏设最大宽度并居中，控件不被横向拉满整屏
+     * · 大屏横屏（宽 ≥ 840dp 且横屏）——底部导航条改为侧边导航栏（Navigation rail）
+     */
+    private void applyResponsiveLayout() {
+        try {
+            var config = getResources().getConfiguration();
+            var wDp = config.screenWidthDp;
+            railMode = wDp >= RAIL_BREAKPOINT_DP
+                    && config.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+
+            var maxContent = getResources().getDimensionPixelSize(R.dimen.content_max_width);
+            var column = findViewById(R.id.content_column);
+            if (column != null) {
+                var lp = column.getLayoutParams();
+                if (lp instanceof android.widget.FrameLayout.LayoutParams flp) {
+                    var capped = Math.min(maxContent, getResources().getDisplayMetrics().widthPixels);
+                    var width = wDp > 640 ? capped : android.view.ViewGroup.LayoutParams.MATCH_PARENT;
+                    if (flp.width != width || flp.gravity != android.view.Gravity.CENTER_HORIZONTAL) {
+                        flp.width = width;
+                        flp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+                        column.setLayoutParams(flp);
+                    }
+                }
+            }
+            applyRailLayout();
+        } catch (Throwable e) {
+            com.suileyan.comm.LogHelp.w("XpMiBackup", "apply responsive layout failed", e);
+        }
+        applyClearance();
+    }
+
+    /** 按 railMode 切换底栏形态：横排（底部悬浮）/ 纵排（侧边导航栏） */
+    private void applyRailLayout() {
+        if (floatingBar == null || navItems == null) return;
+        var bar = (android.widget.LinearLayout) floatingBar;
+        var barLp = (android.widget.FrameLayout.LayoutParams) floatingBar.getLayoutParams();
+        var density = getResources().getDisplayMetrics().density;
+
+        if (railMode) {
+            bar.setOrientation(android.widget.LinearLayout.VERTICAL);
+            barLp.width = getResources().getDimensionPixelSize(R.dimen.nav_rail_width);
+            barLp.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
+            barLp.gravity = android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL;
+            barLp.setMarginStart(Math.round(12 * density));
+            barLp.setMarginEnd(0);
+            barLp.bottomMargin = 0;
+            bar.setPadding(0, getResources().getDimensionPixelSize(R.dimen.space_8),
+                    0, getResources().getDimensionPixelSize(R.dimen.space_8));
+            for (var item : navItems) {
+                var lp = (android.widget.LinearLayout.LayoutParams) item.getLayoutParams();
+                lp.width = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
+                lp.height = getResources().getDimensionPixelSize(R.dimen.list_item_height);
+                lp.weight = 0;
+                item.setLayoutParams(lp);
+            }
+        } else {
+            bar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            var maxBar = getResources().getDimensionPixelSize(R.dimen.floating_bar_max_width);
+            barLp.width = Math.min(maxBar, getResources().getDisplayMetrics().widthPixels
+                    - 2 * getResources().getDimensionPixelSize(R.dimen.floating_bar_margin_h));
+            barLp.height = getResources().getDimensionPixelSize(R.dimen.floating_bar_height);
+            barLp.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.CENTER_HORIZONTAL;
+            barLp.setMarginStart(0);
+            barLp.setMarginEnd(0);
+            barLp.bottomMargin = getResources().getDimensionPixelSize(R.dimen.floating_bar_margin_bottom)
+                    + navBottomInset;
+            bar.setPadding(getResources().getDimensionPixelSize(R.dimen.space_8),
+                    getResources().getDimensionPixelSize(R.dimen.space_6),
+                    getResources().getDimensionPixelSize(R.dimen.space_8),
+                    getResources().getDimensionPixelSize(R.dimen.space_6));
+            for (var item : navItems) {
+                var lp = (android.widget.LinearLayout.LayoutParams) item.getLayoutParams();
+                lp.width = 0;
+                lp.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
+                lp.weight = 1f;
+                item.setLayoutParams(lp);
+            }
+        }
+        floatingBar.setLayoutParams(barLp);
+    }
+
+    /**
+     * 收起 / 展开悬浮底栏（overlay 二级页面打开时收起，让二级页面铺满内容区）。
+     * 收起方向随形态自适应：底部横排 → 向下滑出；大屏侧边导航栏 → 向左滑出。
+     * 只动 translation / alpha（合成层），时长分档 160 / 220ms；
+     * 系统「动画时长 0」时直接跳变，不做过渡（无障碍动效降级）。
+     */
+    private void setFloatingBarVisible(boolean visible) {
+        if (floatingBar == null || barVisible == visible) {
+            applyClearance();
+            return;
+        }
+        barVisible = visible;
+        floatingBar.animate().cancel();
+        floatingBar.setTranslationX(0f);
+        floatingBar.setTranslationY(0f);
+
+        var hiddenX = 0f;
+        var hiddenY = 0f;
+        if (railMode) {
+            var w = floatingBar.getWidth() > 0 ? floatingBar.getWidth()
+                    : getResources().getDimensionPixelSize(R.dimen.nav_rail_width);
+            hiddenX = -(w + getResources().getDimensionPixelSize(R.dimen.space_16));
+        } else {
+            var h = floatingBar.getHeight() > 0 ? floatingBar.getHeight()
+                    : getResources().getDimensionPixelSize(R.dimen.floating_bar_height);
+            hiddenY = h + getResources().getDimensionPixelSize(R.dimen.floating_bar_margin_bottom)
+                    + navBottomInset;
+        }
+        final var tx = hiddenX;
+        final var ty = hiddenY;
+
+        if (visible) {
+            floatingBar.setVisibility(View.VISIBLE);
+            if (animationsEnabled()) {
+                floatingBar.setTranslationX(tx);
+                floatingBar.setTranslationY(ty);
+                floatingBar.setAlpha(0f);
+                floatingBar.animate().translationX(0f).translationY(0f).alpha(1f).setDuration(220)
+                        .setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f)).start();
+            } else {
+                floatingBar.setAlpha(1f);
+            }
+        } else if (animationsEnabled()) {
+            floatingBar.animate().translationX(tx).translationY(ty).alpha(0f).setDuration(160)
+                    .withEndAction(() -> {
+                        if (!barVisible) floatingBar.setVisibility(View.GONE);
+                    }).start();
+        } else {
+            floatingBar.setTranslationX(tx);
+            floatingBar.setTranslationY(ty);
+            floatingBar.setAlpha(0f);
+            floatingBar.setVisibility(View.GONE);
+        }
+        applyClearance();
+    }
+
+    /** 按下反馈：图标底板轻微缩放（≤1.02 的克制幅度区间，取 0.94 做下压感） */
+    private void pressFeedback(View box, boolean pressed) {
+        if (box == null) return;
+        if (!animationsEnabled()) {
+            box.setScaleX(1f);
+            box.setScaleY(1f);
+            return;
+        }
+        box.animate().cancel();
+        var scale = pressed ? 0.94f : 1f;
+        box.animate().scaleX(scale).scaleY(scale).setDuration(120)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+    }
+
+    /** 系统动画时长档位为 0（开发者选项/无障碍）时不播放过渡 */
+    private boolean animationsEnabled() {
+        try {
+            return android.provider.Settings.Global.getFloat(getContentResolver(),
+                    android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f;
+        } catch (Throwable e) {
+            return true;
+        }
+    }
+
+    private void setViewHeight(View v, int height) {
+        if (v == null || v.getLayoutParams() == null) return;
+        var lp = v.getLayoutParams();
+        if (lp.height != height) {
+            lp.height = height;
+            v.setLayoutParams(lp);
+        }
+    }
+
+    private void setViewWidth(View v, int width) {
+        if (v == null || v.getLayoutParams() == null) return;
+        var lp = v.getLayoutParams();
+        if (lp.width != width) {
+            lp.width = width;
+            v.setLayoutParams(lp);
         }
     }
 
@@ -371,8 +644,22 @@ public class MainActivity extends Activity {
             dispatcher.registerOnBackInvokedCallback(
                     android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback);
             backCallbackRegistered = true;
-        } catch (Exception e) {
-            com.suileyan.comm.LogHelp.w("XpMiBackup", "update back invoke failed", e);
+        } catch (Throwable e) {
+            // 必须是 Throwable 而非 Exception：OnBackAnimationCallback / BackEvent.getProgress()
+            // 属 API 34+，在部分 ROM 上实例化或注册会抛 NoClassDefFoundError / NoSuchMethodError，
+            // 它们继承自 Error，catch(Exception) 捕不到 —— 异常会从 onCreate 直冒到主线程杀进程，
+            // 表现为"启动即闪退、日志停在 initTabs done、Tab 视图从未创建"。
+            // 此处捕获后降级为普通回调，保证手势返回可用，同时留下证据。
+            com.suileyan.comm.LogHelp.e("XpMiBackup",
+                    "update back invoke failed, fallback to plain callback", e);
+            try {
+                backCallback = this::handleBack;
+                getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                        android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback);
+                backCallbackRegistered = true;
+            } catch (Throwable e2) {
+                com.suileyan.comm.LogHelp.e("XpMiBackup", "update back invoke fallback failed", e2);
+            }
         }
     }
 
@@ -692,33 +979,58 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        LogHelp.i("XpMiBackup", "STARTUP step: onResume enter (tabsReady=" + tabsReady + ")");
         if (Environment.isExternalStorageManager() && !tabsReady) {
             initTabs();
             updateTabSelection(TAB_NAMES[0]);
             updateBackInvoke();
         }
         maybePromptModuleRestore();
+        LogHelp.i("XpMiBackup", "STARTUP step: onResume END");
     }
 
-    /** 根据Tab名更新四个底部Tab的选中高亮 */
+    /**
+     * 更新悬浮底栏选中态与顶栏标题。
+     * 配色规则（小米手法：层级靠同一支色的不同不透明度，不堆灰阶）：
+     * · 未选中——图标/文字用 text_tertiary（对底栏表面 4.7:1，满足 WCAG 2.1 AA）
+     * · 已选中——品牌色淡底胶囊 + 品牌色图标 + text_primary 文字（15:1）
+     * · 核心操作（备份）——图标常驻品牌色实心圆 + 白色反色图标，与其余导航项区分
+     *
+     * 关于「选中文字为什么不用品牌色」：#FF6900 对白底 / 白字对比度约 2.88:1，
+     * 对品牌淡底仅 2.4:1，作为正文色不满足 WCAG 2.1 AA（4.5:1）。品牌色是官方强制色值，
+     * 故改为：品牌身份由「胶囊底 + 图标色 + 核心圆」承载，文字改用 text_primary 保证可读性。
+     */
     private void updateTabSelection(String tab) {
-        setTabColors("device".equals(tab), "service".equals(tab), "account".equals(tab), "backup".equals(tab));
+        for (var i = 0; i < TAB_COUNT; i++) {
+            applyTabState(i, TAB_NAMES[i].equals(tab));
+        }
+        if (tvTopTitle != null) {
+            var index = indexOfTab(tab);
+            if (index >= 0) tvTopTitle.setText(TAB_TITLE_RES[index]);
+        }
     }
 
-    /** 更新四个底部Tab的选中颜色与胶囊背景 */
-    private void setTabColors(boolean device, boolean service, boolean account, boolean backup) {
-        setTabState(tabDeviceIcon, tabDeviceText, device);
-        setTabState(tabServiceIcon, tabServiceText, service);
-        setTabState(tabAccountIcon, tabAccountText, account);
-        setTabState(tabBackupIcon, tabBackupText, backup);
+    /** 设置单个导航项的选中态 */
+    private void applyTabState(int index, boolean selected) {
+        if (navItems == null || index < 0 || index >= navItems.length) return;
+        var res = getResources();
+        var idleTextColor = res.getColor(R.color.text_tertiary, getTheme());
+        var activeTextColor = res.getColor(R.color.text_primary, getTheme());
+        navItems[index].setSelected(selected);
+        navTexts[index].setTextColor(selected ? activeTextColor : idleTextColor);
+        if (index == CORE_TAB) {
+            // 核心操作：图标固定白色（落在品牌色实心圆内），不随选中态改色
+            navIcons[index].setColorFilter(res.getColor(R.color.on_brand, getTheme()));
+        } else {
+            navIcons[index].setColorFilter(res.getColor(
+                    selected ? R.color.brand : R.color.text_tertiary, getTheme()));
+        }
     }
 
-    /** 设置单个Tab的选中态：选中 = 实心主色胶囊 + 反色图标文字（白昼黑胶囊白字/黑夜白胶囊黑字） */
-    private void setTabState(ImageView icon, TextView text, boolean selected) {
-        var parent = (View) icon.getParent();
-        parent.setSelected(selected);
-        var color = getResources().getColor(selected ? R.color.primary_text_on : R.color.text_disabled);
-        icon.setColorFilter(color);
-        text.setTextColor(color);
+    private int indexOfTab(String tab) {
+        for (var i = 0; i < TAB_COUNT; i++) {
+            if (TAB_NAMES[i].equals(tab)) return i;
+        }
+        return -1;
     }
 }

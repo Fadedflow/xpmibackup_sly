@@ -1,202 +1,227 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  云备份助手主界面 —— 小米（HyperOS）应用设计语言
+  ─────────────────────────────────────────────────────────────
+  结构（自下而上）：
+    · 根 FrameLayout 承载「内容层」与「悬浮底栏层」两个平面
+    · 内容层：状态栏占位 → 顶部标题栏 → 内容区（Tab 层 + overlay 二级页面）→ 底部留白
+    · 悬浮底栏层：脱离内容流，浮于内容之上，24dp 圆角 + elevation 投影 + 左右/底部留白
+  底部留白（bottom_spacer）与底栏投影方向由 MainActivity.applyFloatingBarInsets() 统一维护：
+  Android 15+ edge-to-edge 下按导航栏 inset 追加，避免被手势条遮挡。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="@color/background">
 
-    <!-- 状态栏占位 -->
-    <View
-        android:id="@+id/status_bar_spacer"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:background="@color/status_bar" />
-
-    <!-- 顶部标题栏：LSPosed 风格主色条 -->
+    <!-- ==================== 内容层 ==================== -->
     <LinearLayout
+        android:id="@+id/content_column"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:background="@color/status_bar"
-        android:gravity="center_vertical"
-        android:paddingStart="20dp"
-        android:paddingEnd="4dp">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
+        <!-- 状态栏占位（仅 Android 15+ 强制 edge-to-edge 需要，见 MainActivity） -->
+        <View
+            android:id="@+id/status_bar_spacer"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:background="@color/status_bar" />
+
+        <!-- 顶部标题栏：页面标题 + 更多菜单 -->
+        <LinearLayout
+            android:id="@+id/top_bar"
+            style="@style/XmTopBar">
+
+            <TextView
+                android:id="@+id/tv_top_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:text="@string/app_name"
+                android:textAppearance="@style/XmTextPageTitle" />
+
+            <TextView
+                android:id="@+id/btn_top_menu"
+                style="@style/XmTopBarIconButton"
+                android:text="···"
+                android:textSize="20sp"
+                android:letterSpacing="-0.15"
+                android:textColor="@color/text_primary"
+                android:contentDescription="@string/more_menu" />
+        </LinearLayout>
+
+        <!-- 内容区：左侧导航栏占位（大屏横屏）+ Tab 页 / overlay 二级页面 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
             android:layout_weight="1"
-            android:text="@string/app_name"
-            android:textSize="19sp"
-            android:textStyle="bold"
-            android:textColor="@color/text_primary"
-            android:letterSpacing="0.02" />
+            android:orientation="horizontal">
 
-        <!-- 顶部菜单：点击弹出 设置 / 关于 -->
-        <TextView
-            android:id="@+id/btn_top_menu"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="···"
-            android:textSize="20sp"
-            android:letterSpacing="-0.15"
-            android:textColor="@color/text_primary"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="?android:attr/selectableItemBackground"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp" />
+            <View
+                android:id="@+id/nav_rail_spacer"
+                android:layout_width="0dp"
+                android:layout_height="match_parent" />
+
+            <FrameLayout
+                android:id="@+id/content_area"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1">
+
+                <FrameLayout
+                    android:id="@+id/fragment_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipChildren="false" />
+
+                <FrameLayout
+                    android:id="@+id/overlay_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@android:color/transparent"
+                    android:visibility="gone" />
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- 底部留白：为悬浮底栏让出空间，overlay 二级页面打开时归零 -->
+        <View
+            android:id="@+id/bottom_spacer"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/floating_bar_clearance" />
     </LinearLayout>
 
-    <!-- 内容区域：tab层(4页面常驻横向排开) + overlay层(二级页面) -->
-    <FrameLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1">
-
-        <FrameLayout
-            android:id="@+id/fragment_container"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:clipChildren="false" />
-
-        <FrameLayout
-            android:id="@+id/overlay_container"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@android:color/transparent"
-            android:visibility="gone" />
-    </FrameLayout>
-
-    <!-- 底部Tab栏：LSPosed 风格胶囊选中态（Android 15+ edge-to-edge 强制，需处理导航栏 insets，见 MainActivity.applyEdgeToEdgeInsets） -->
+    <!-- ==================== 悬浮底栏层 ==================== -->
+    <!-- 悬浮于内容之上：24dp 圆角、1px 内描边、elevation 投影、左右 16dp + 底部 16dp 留白 -->
     <LinearLayout
         android:id="@+id/tab_bar_container"
-        android:layout_width="match_parent"
-        android:layout_height="64dp"
-        android:background="@color/surface"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:elevation="8dp"
-        android:paddingStart="12dp"
-        android:paddingEnd="12dp"
-        android:paddingTop="6dp"
-        android:paddingBottom="6dp">
+        style="@style/XmFloatingBar"
+        android:layout_gravity="bottom"
+        android:layout_marginStart="@dimen/floating_bar_margin_h"
+        android:layout_marginEnd="@dimen/floating_bar_margin_h"
+        android:layout_marginBottom="@dimen/floating_bar_margin_bottom">
 
-        <!-- 设备配置Tab -->
+        <!-- 设备配置 -->
         <LinearLayout
             android:id="@+id/tab_device"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="@drawable/bg_tab_selected">
+            style="@style/XmNavItem"
+            android:contentDescription="@string/tab_device_config">
 
-            <ImageView
-                android:id="@+id/tab_device_icon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:src="@drawable/ic_tab_device"
-                android:importantForAccessibility="no"
-                android:layout_marginBottom="2dp" />
+            <FrameLayout
+                android:id="@+id/tab_device_icon_box"
+                android:layout_width="@dimen/floating_bar_core_icon"
+                android:layout_height="@dimen/floating_bar_core_icon">
+
+                <ImageView
+                    android:id="@+id/tab_device_icon"
+                    android:layout_width="@dimen/floating_bar_icon"
+                    android:layout_height="@dimen/floating_bar_icon"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_tab_device"
+                    android:importantForAccessibility="no" />
+            </FrameLayout>
 
             <TextView
                 android:id="@+id/tab_device_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_2"
                 android:text="@string/tab_device_config"
-                android:textSize="11sp"
-                android:textColor="@color/primary" />
+                android:textSize="@dimen/text_tab"
+                android:importantForAccessibility="no" />
         </LinearLayout>
 
-        <!-- 服务配置Tab -->
+        <!-- NAS 配置 -->
         <LinearLayout
             android:id="@+id/tab_service"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="@drawable/bg_tab_selected">
+            style="@style/XmNavItem"
+            android:contentDescription="@string/tab_service_config">
 
-            <ImageView
-                android:id="@+id/tab_service_icon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:src="@drawable/ic_tab_nas"
-                android:importantForAccessibility="no"
-                android:layout_marginBottom="2dp" />
+            <FrameLayout
+                android:id="@+id/tab_service_icon_box"
+                android:layout_width="@dimen/floating_bar_core_icon"
+                android:layout_height="@dimen/floating_bar_core_icon">
+
+                <ImageView
+                    android:id="@+id/tab_service_icon"
+                    android:layout_width="@dimen/floating_bar_icon"
+                    android:layout_height="@dimen/floating_bar_icon"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_tab_nas"
+                    android:importantForAccessibility="no" />
+            </FrameLayout>
 
             <TextView
                 android:id="@+id/tab_service_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_2"
                 android:text="@string/tab_service_config"
-                android:textSize="11sp"
-                android:textColor="@color/text_disabled" />
+                android:textSize="@dimen/text_tab"
+                android:importantForAccessibility="no" />
         </LinearLayout>
 
-        <!-- 账号管理Tab -->
+        <!-- 云盘账号 -->
         <LinearLayout
             android:id="@+id/tab_account"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="@drawable/bg_tab_selected">
+            style="@style/XmNavItem"
+            android:contentDescription="@string/tab_account_config">
 
-            <ImageView
-                android:id="@+id/tab_account_icon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:src="@drawable/ic_tab_cloud"
-                android:importantForAccessibility="no"
-                android:layout_marginBottom="2dp" />
+            <FrameLayout
+                android:id="@+id/tab_account_icon_box"
+                android:layout_width="@dimen/floating_bar_core_icon"
+                android:layout_height="@dimen/floating_bar_core_icon">
+
+                <ImageView
+                    android:id="@+id/tab_account_icon"
+                    android:layout_width="@dimen/floating_bar_icon"
+                    android:layout_height="@dimen/floating_bar_icon"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_tab_cloud"
+                    android:importantForAccessibility="no" />
+            </FrameLayout>
 
             <TextView
                 android:id="@+id/tab_account_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_2"
                 android:text="@string/tab_account_config"
-                android:textSize="11sp"
-                android:textColor="@color/text_disabled" />
+                android:textSize="@dimen/text_tab"
+                android:importantForAccessibility="no" />
         </LinearLayout>
 
-        <!-- 备份Tab -->
+        <!-- 备份：核心操作，图标常驻品牌色实心圆高亮 -->
         <LinearLayout
             android:id="@+id/tab_backup"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="@drawable/bg_tab_selected">
+            style="@style/XmNavItem"
+            android:contentDescription="@string/tab_backup_config">
 
-            <ImageView
-                android:id="@+id/tab_backup_icon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:src="@drawable/ic_tab_backup"
-                android:importantForAccessibility="no"
-                android:layout_marginBottom="2dp" />
+            <FrameLayout
+                android:id="@+id/tab_backup_icon_box"
+                android:layout_width="@dimen/floating_bar_core_icon"
+                android:layout_height="@dimen/floating_bar_core_icon"
+                android:background="@drawable/bg_tab_core_icon">
+
+                <ImageView
+                    android:id="@+id/tab_backup_icon"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_tab_backup"
+                    android:importantForAccessibility="no" />
+            </FrameLayout>
 
             <TextView
                 android:id="@+id/tab_backup_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_2"
                 android:text="@string/tab_backup_config"
-                android:textSize="11sp"
-                android:textColor="@color/text_disabled" />
+                android:textSize="@dimen/text_tab"
+                android:importantForAccessibility="no" />
         </LinearLayout>
     </LinearLayout>
-</LinearLayout>
+</FrameLayout>

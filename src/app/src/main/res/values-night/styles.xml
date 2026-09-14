@@ -1,16 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  小米（HyperOS）风格样式表 —— 深色
+  ─────────────────────────────────────────────────────────────
+  只覆盖与浅色不同的部分：主题父类、状态栏图标、对话框父类。
+  颜色本身由 values-night/colors.xml 对称翻转，样式表结构与浅色一致。
+-->
 <resources>
-    <!-- 全局主题：LSPosed 风格深色 -->
+
     <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
-        <item name="android:colorPrimary">@color/primary</item>
-        <item name="android:colorPrimaryDark">@color/primary_dark</item>
-        <item name="android:colorAccent">@color/primary</item>
+        <item name="android:colorPrimary">@color/brand</item>
+        <item name="android:colorPrimaryDark">@color/brand_pressed</item>
+        <item name="android:colorAccent">@color/brand</item>
         <item name="android:windowBackground">@color/background</item>
         <item name="android:statusBarColor">@color/status_bar</item>
-        <item name="android:colorControlActivated">@color/primary</item>
-        <item name="android:colorControlHighlight">@color/tab_selected_bg</item>
+        <item name="android:navigationBarColor">@color/background</item>
+        <item name="android:colorControlActivated">@color/brand</item>
+        <item name="android:colorControlHighlight">@color/ripple</item>
         <item name="android:textColorPrimary">@color/text_primary</item>
         <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:textColorHint">@color/text_hint</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:alertDialogTheme">@style/XmDialogTheme</item>
     </style>
+
+    <style name="XmDialogTheme" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">@color/brand</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:windowBackground">@drawable/bg_dialog</item>
+        <item name="android:windowMinWidthMajor">72%</item>
+        <item name="android:windowMinWidthMinor">86%</item>
+    </style>
+
 </resources>

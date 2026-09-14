@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 备份页：备份方式卡片 + Root 模块选项 + 主 CTA；页面标题由顶栏统一承担 -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -9,17 +10,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/title_backup_config"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:textColor="@color/text_primary"
-            android:layout_marginStart="8dp"
-            android:layout_marginBottom="16dp" />
+        android:paddingStart="@dimen/page_padding_h"
+        android:paddingEnd="@dimen/page_padding_h"
+        android:paddingTop="@dimen/page_padding_top"
+        android:paddingBottom="@dimen/page_padding_bottom">
 
         <!-- 备份方式卡片 -->
         <LinearLayout
@@ -27,16 +21,15 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:background="@drawable/bg_card"
-            android:padding="16dp"
-            android:layout_marginBottom="16dp">
+            android:padding="@dimen/card_padding"
+            android:layout_marginBottom="@dimen/card_gap">
 
             <TextView
+                style="@style/XmTextSection"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/backup_method"
-                android:textSize="13sp"
-                android:textColor="@color/text_secondary"
-                android:layout_marginBottom="8dp" />
+                android:layout_marginBottom="@dimen/space_8"
+                android:text="@string/backup_method" />
 
             <RadioGroup
                 android:id="@+id/rg_backup_method"
@@ -46,37 +39,29 @@
 
                 <RadioButton
                     android:id="@+id/rb_nas"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/backup_method_nas"
-                    android:textColor="@color/text_primary"
-                    android:textSize="14sp"
-                    android:checked="true" />
+                    style="@style/XmRadio"
+                    android:checked="true"
+                    android:text="@string/backup_method_nas" />
 
                 <TextView
+                    style="@style/XmTextCaption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/backup_method_nas_hint"
-                    android:textSize="12sp"
-                    android:textColor="@color/text_hint"
-                    android:layout_marginStart="32dp"
-                    android:layout_marginBottom="8dp" />
+                    android:layout_marginStart="@dimen/space_32"
+                    android:layout_marginBottom="@dimen/space_8"
+                    android:text="@string/backup_method_nas_hint" />
 
                 <RadioButton
                     android:id="@+id/rb_cloud"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/backup_method_cloud"
-                    android:textColor="@color/text_primary"
-                    android:textSize="14sp" />
+                    style="@style/XmRadio"
+                    android:text="@string/backup_method_cloud" />
 
                 <TextView
+                    style="@style/XmTextCaption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/backup_method_cloud_hint"
-                    android:textSize="12sp"
-                    android:textColor="@color/text_hint"
-                    android:layout_marginStart="32dp" />
+                    android:layout_marginStart="@dimen/space_32"
+                    android:text="@string/backup_method_cloud_hint" />
             </RadioGroup>
 
             <!-- NAS 备份方案选择 -->
@@ -85,20 +70,19 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingTop="16dp">
+                android:paddingTop="@dimen/space_16">
 
                 <TextView
+                    style="@style/XmTextLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/select_profile"
-                    android:textSize="13sp"
-                    android:textColor="@color/text_secondary"
-                    android:layout_marginBottom="6dp" />
+                    android:layout_marginBottom="@dimen/label_gap"
+                    android:text="@string/select_profile" />
 
                 <Spinner
                     android:id="@+id/backup_profile_spinner"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="@dimen/touch_target_min"
                     android:spinnerMode="dropdown" />
             </LinearLayout>
 
@@ -109,91 +93,70 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:visibility="gone"
-                android:paddingTop="16dp">
+                android:paddingTop="@dimen/space_16">
 
                 <TextView
+                    style="@style/XmTextLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/select_cloud_account"
-                    android:textSize="13sp"
-                    android:textColor="@color/text_secondary"
-                    android:layout_marginBottom="6dp" />
+                    android:layout_marginBottom="@dimen/label_gap"
+                    android:text="@string/select_cloud_account" />
 
                 <Spinner
                     android:id="@+id/cloud_account_spinner"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="@dimen/touch_target_min"
                     android:spinnerMode="dropdown" />
 
                 <TextView
+                    style="@style/XmTextCaption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/cloud_transfer_coming_soon"
-                    android:textSize="12sp"
-                    android:textColor="@color/text_hint"
-                    android:layout_marginTop="10dp" />
+                    android:layout_marginTop="@dimen/space_8"
+                    android:text="@string/cloud_transfer_coming_soon" />
             </LinearLayout>
         </LinearLayout>
 
         <!-- Root 模块备份：打包 Magisk/KernelSU/APatch 模块目录并入本次备份 -->
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:background="@drawable/bg_card"
-            android:padding="14dp"
-            android:layout_marginBottom="16dp"
-            android:gravity="center_vertical">
+            style="@style/XmCardRow"
+            android:layout_marginBottom="@dimen/section_gap">
 
             <CheckBox
                 android:id="@+id/cb_root_modules"
+                style="@style/XmCheckBox"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:checked="true"
                 android:text="@string/root_modules_backup"
-                android:textColor="@color/text_primary"
-                android:textSize="14sp" />
+                android:textSize="@dimen/text_label" />
         </LinearLayout>
 
         <Button
             android:id="@+id/btn_start_backup"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/start_backup"
-            android:textColor="@color/primary_text_on"
-            android:background="@drawable/bg_button_primary"
-            android:textSize="15sp" />
+            style="@style/XmButtonPrimary"
+            android:text="@string/start_backup" />
 
         <!-- 备份到电脑：mibackpc（WebDAV 接收器）快速配置入口 -->
         <Button
             android:id="@+id/btn_pc_backup"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text="@string/pc_backup"
-            android:textColor="@color/text_primary"
-            android:background="@drawable/bg_button_secondary"
-            android:textSize="15sp" />
+            style="@style/XmButtonSecondary"
+            android:layout_marginTop="@dimen/space_12"
+            android:text="@string/pc_backup" />
 
-        <!-- 恢复 Root 模块：从快照解包回 /data/adb（二期，独立确认 UI） -->
+        <!-- 恢复 Root 模块：从快照解包回 /data/adb -->
         <Button
             android:id="@+id/btn_restore_modules"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text="@string/restore_modules_btn"
-            android:textColor="@color/text_primary"
-            android:background="@drawable/bg_button_secondary"
-            android:textSize="15sp" />
+            style="@style/XmButtonSecondary"
+            android:layout_marginTop="@dimen/space_12"
+            android:text="@string/restore_modules_btn" />
 
         <TextView
+            style="@style/XmTextCaption"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/pc_backup_hint"
-            android:textSize="12sp"
-            android:textColor="@color/text_hint"
-            android:layout_marginTop="6dp"
-            android:layout_marginStart="8dp" />
+            android:layout_marginTop="@dimen/space_8"
+            android:text="@string/pc_backup_hint" />
     </LinearLayout>
 </ScrollView>

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 未选中态：透明（层级靠文字色，不靠换底） -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="@color/input_bg" />
-    <corners android:radius="18dp" />
+    <solid android:color="@android:color/transparent" />
+    <corners android:radius="@dimen/radius_card" />
 </shape>

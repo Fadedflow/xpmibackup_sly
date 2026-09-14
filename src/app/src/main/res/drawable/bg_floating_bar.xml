@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 卡片：中性表面 + 1px 内描边（官方「内描边 1px 10%」手法），不加投影 -->
+<!-- 悬浮底栏容器：中性表面 + 24dp 圆角 + 1px 内描边；投影由 elevation 统一投射 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="@color/surface" />
-            <corners android:radius="@dimen/radius_card" />
+            <solid android:color="@color/floating_bar" />
+            <corners android:radius="@dimen/radius_bar" />
         </shape>
     </item>
     <item>
@@ -12,8 +12,8 @@
             <solid android:color="@android:color/transparent" />
             <stroke
                 android:width="1dp"
-                android:color="@color/card_border" />
-            <corners android:radius="@dimen/radius_card" />
+                android:color="@color/floating_bar_border" />
+            <corners android:radius="@dimen/radius_bar" />
         </shape>
     </item>
 </layer-list>

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 网页登录页（overlay 二级页面）：标题 + 完成键 + WebView + 底部提示 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -8,34 +9,27 @@
     <!-- 标题行：标题 + 完成键 -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="@dimen/top_bar_height"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingStart="24dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="16dp"
-        android:paddingBottom="12dp">
+        android:paddingStart="@dimen/space_20"
+        android:paddingEnd="@dimen/space_8">
 
         <TextView
             android:id="@+id/tv_webview_title"
+            style="@style/XmTextPageTitle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/title_webview_login"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:textColor="@color/text_primary" />
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="@string/title_webview_login" />
 
         <Button
             android:id="@+id/btn_webview_done"
+            style="@style/XmButtonPrimary"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/webview_login_done"
-            android:textColor="@color/primary_text_on"
-            android:background="@drawable/bg_button_primary"
-            android:textSize="14sp"
-            android:paddingStart="20dp"
-            android:paddingEnd="20dp" />
+            android:text="@string/webview_login_done" />
     </LinearLayout>
 
     <!-- 应用内网页登录区 -->
@@ -44,16 +38,17 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:background="@color/surface" />
+        android:background="@color/surface"
+        android:layout_marginStart="@dimen/page_padding_h"
+        android:layout_marginEnd="@dimen/page_padding_h" />
 
     <TextView
+        style="@style/XmTextCaption"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/webview_login_tip"
-        android:textSize="12sp"
-        android:textColor="@color/text_hint"
-        android:paddingStart="24dp"
-        android:paddingEnd="24dp"
-        android:paddingTop="10dp"
-        android:paddingBottom="14dp" />
+        android:paddingStart="@dimen/page_padding_h"
+        android:paddingEnd="@dimen/page_padding_h"
+        android:paddingTop="@dimen/space_12"
+        android:paddingBottom="@dimen/space_16"
+        android:text="@string/webview_login_tip" />
 </LinearLayout>

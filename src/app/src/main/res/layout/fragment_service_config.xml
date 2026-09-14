@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- NAS / 自定义配置页：分段选项卡 + 分组卡片；页面标题由顶栏统一承担 -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -9,54 +10,54 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:paddingStart="@dimen/page_padding_h"
+        android:paddingEnd="@dimen/page_padding_h"
+        android:paddingTop="@dimen/page_padding_top"
+        android:paddingBottom="@dimen/page_padding_bottom">
 
-        <!-- 顶部：浏览器式选项卡 + 右侧切换方案下拉（按选项卡类型过滤方案） -->
+        <!-- 顶部：分段选项卡 + 方案下拉（按选项卡类型过滤方案） -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginStart="8dp"
-            android:layout_marginBottom="16dp">
+            android:layout_marginBottom="@dimen/space_16">
 
             <TextView
                 android:id="@+id/tab_nas"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/service_tab_nas"
-                android:textSize="14sp"
+                android:layout_height="@dimen/touch_target_min"
                 android:gravity="center"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:paddingTop="10dp"
-                android:paddingBottom="10dp"
+                android:minWidth="88dp"
+                android:paddingStart="@dimen/space_16"
+                android:paddingEnd="@dimen/space_16"
                 android:clickable="true"
                 android:focusable="true"
-                android:background="@drawable/bg_tab_selected" />
+                android:background="@drawable/bg_tab_selected"
+                android:text="@string/service_tab_nas"
+                android:textSize="@dimen/text_label" />
 
             <TextView
                 android:id="@+id/tab_custom"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="@string/service_tab_custom"
-                android:textSize="14sp"
+                android:layout_height="@dimen/touch_target_min"
+                android:layout_marginStart="@dimen/space_8"
                 android:gravity="center"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:paddingTop="10dp"
-                android:paddingBottom="10dp"
+                android:minWidth="88dp"
+                android:paddingStart="@dimen/space_16"
+                android:paddingEnd="@dimen/space_16"
                 android:clickable="true"
                 android:focusable="true"
-                android:background="@drawable/bg_tab_selected" />
+                android:background="@drawable/bg_tab_normal"
+                android:text="@string/service_tab_custom"
+                android:textSize="@dimen/text_label" />
 
             <Spinner
                 android:id="@+id/profile_spinner"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="@dimen/touch_target_min"
                 android:layout_weight="1"
-                android:layout_marginStart="12dp"
+                android:layout_marginStart="@dimen/space_12"
                 android:spinnerMode="dropdown" />
         </LinearLayout>
 
@@ -66,38 +67,30 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:background="@drawable/bg_card"
-            android:padding="16dp"
-            android:layout_marginBottom="16dp">
+            android:padding="@dimen/card_padding"
+            android:layout_marginBottom="@dimen/card_gap">
 
             <TextView
                 android:id="@+id/tv_profile_name_label"
+                style="@style/XmTextLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/profile_name"
-                android:textSize="13sp"
-                android:textColor="@color/text_secondary"
-                android:layout_marginBottom="2dp" />
+                android:layout_marginBottom="@dimen/label_gap"
+                android:text="@string/profile_name" />
 
             <TextView
+                style="@style/XmTextCaption"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/desc_profile_name"
-                android:textSize="12sp"
-                android:textColor="@color/text_hint"
-                android:layout_marginBottom="8dp" />
+                android:layout_marginBottom="@dimen/space_8"
+                android:text="@string/desc_profile_name" />
 
             <EditText
                 android:id="@+id/et_profile_name"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                style="@style/XmInput"
                 android:hint="@string/profile_name_hint"
                 android:inputType="text"
-                android:maxLines="1"
-                android:textSize="14sp"
-                android:textColor="@color/text_primary"
-                android:background="@drawable/bg_input"
-                android:textColorHint="@color/text_hint"
-                android:padding="12dp" />
+                android:maxLines="1" />
         </LinearLayout>
 
         <!-- ========== NAS 配置内容区 ========== -->
@@ -113,44 +106,40 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:background="@drawable/bg_card"
-                android:padding="16dp"
-                android:layout_marginBottom="16dp">
+                android:padding="@dimen/card_padding"
+                android:layout_marginBottom="@dimen/card_gap">
 
                 <TextView
+                    style="@style/XmTextLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/backup_protocol"
-                    android:textSize="13sp"
-                    android:textColor="@color/text_secondary"
-                    android:layout_marginBottom="8dp" />
+                    android:layout_marginBottom="@dimen/space_4"
+                    android:text="@string/backup_protocol" />
 
                 <RadioGroup
                     android:id="@+id/rg_protocol"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginBottom="4dp">
+                    android:orientation="horizontal">
 
                     <RadioButton
                         android:id="@+id/rb_smb"
+                        style="@style/XmRadio"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="@string/account_type_smb"
-                        android:textColor="@color/text_primary"
-                        android:textSize="14sp"
                         android:maxLines="1"
-                        android:checked="true" />
+                        android:checked="true"
+                        android:text="@string/account_type_smb" />
 
                     <RadioButton
                         android:id="@+id/rb_webdav"
+                        style="@style/XmRadio"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="@string/account_type_webdav"
-                        android:textColor="@color/text_primary"
-                        android:textSize="14sp"
-                        android:maxLines="1" />
+                        android:maxLines="1"
+                        android:text="@string/account_type_webdav" />
                 </RadioGroup>
             </LinearLayout>
 
@@ -160,63 +149,49 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:background="@drawable/bg_card"
-                android:padding="16dp"
-                android:layout_marginBottom="16dp">
+                android:padding="@dimen/card_padding"
+                android:layout_marginBottom="@dimen/card_gap">
 
                 <TextView
+                    style="@style/XmTextLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/upload_threads"
-                    android:textSize="13sp"
-                    android:textColor="@color/text_secondary"
-                    android:layout_marginBottom="2dp" />
+                    android:layout_marginBottom="@dimen/label_gap"
+                    android:text="@string/upload_threads" />
 
                 <TextView
+                    style="@style/XmTextCaption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/desc_upload_threads"
-                    android:textSize="12sp"
-                    android:textColor="@color/text_hint"
-                    android:layout_marginBottom="8dp" />
+                    android:layout_marginBottom="@dimen/space_8"
+                    android:text="@string/desc_upload_threads" />
 
                 <EditText
                     android:id="@+id/et_upload_threads"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    style="@style/XmInput"
                     android:hint="3"
                     android:inputType="number"
-                    android:textColor="@color/text_primary"
-                    android:background="@drawable/bg_input"
-                    android:textColorHint="@color/text_hint"
-                    android:padding="12dp"
-                    android:layout_marginBottom="16dp" />
+                    android:layout_marginBottom="@dimen/field_gap" />
 
                 <TextView
+                    style="@style/XmTextLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/chunk_size_mb"
-                    android:textSize="13sp"
-                    android:textColor="@color/text_secondary"
-                    android:layout_marginBottom="2dp" />
+                    android:layout_marginBottom="@dimen/label_gap"
+                    android:text="@string/chunk_size_mb" />
 
                 <TextView
+                    style="@style/XmTextCaption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/desc_chunk_size"
-                    android:textSize="12sp"
-                    android:textColor="@color/text_hint"
-                    android:layout_marginBottom="8dp" />
+                    android:layout_marginBottom="@dimen/space_8"
+                    android:text="@string/desc_chunk_size" />
 
                 <EditText
                     android:id="@+id/et_chunk_size_mb"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    style="@style/XmInput"
                     android:hint="64"
-                    android:inputType="number"
-                    android:textColor="@color/text_primary"
-                    android:background="@drawable/bg_input"
-                    android:textColorHint="@color/text_hint"
-                    android:padding="12dp" />
+                    android:inputType="number" />
             </LinearLayout>
 
             <!-- 协议参数卡片（面板随协议切换） -->
@@ -225,10 +200,10 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:background="@drawable/bg_card"
-                android:padding="16dp"
-                android:layout_marginBottom="16dp">
+                android:padding="@dimen/card_padding"
+                android:layout_marginBottom="@dimen/card_gap">
 
-                <!-- SMB配置面板 -->
+                <!-- SMB 配置面板 -->
                 <LinearLayout
                     android:id="@+id/panel_smb"
                     android:layout_width="match_parent"
@@ -236,146 +211,111 @@
                     android:orientation="vertical">
 
                     <TextView
+                        style="@style/XmTextLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/server_address"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_secondary"
-                        android:layout_marginBottom="2dp" />
+                        android:layout_marginBottom="@dimen/label_gap"
+                        android:text="@string/server_address" />
 
                     <TextView
+                        style="@style/XmTextCaption"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/desc_smb_server"
-                        android:textSize="12sp"
-                        android:textColor="@color/text_hint"
-                        android:layout_marginBottom="8dp" />
+                        android:layout_marginBottom="@dimen/space_8"
+                        android:text="@string/desc_smb_server" />
 
                     <EditText
                         android:id="@+id/et_smb_server"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        style="@style/XmInput"
                         android:hint="@string/smb_server_hint"
                         android:inputType="text"
-                        android:textColor="@color/text_primary"
-                        android:background="@drawable/bg_input"
-                        android:textColorHint="@color/text_hint"
-                        android:padding="12dp"
-                        android:layout_marginBottom="16dp" />
+                        android:layout_marginBottom="@dimen/field_gap" />
 
                     <TextView
+                        style="@style/XmTextLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/port"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_secondary"
-                        android:layout_marginBottom="2dp" />
+                        android:layout_marginBottom="@dimen/label_gap"
+                        android:text="@string/port" />
 
                     <TextView
+                        style="@style/XmTextCaption"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/desc_smb_port"
-                        android:textSize="12sp"
-                        android:textColor="@color/text_hint"
-                        android:layout_marginBottom="8dp" />
+                        android:layout_marginBottom="@dimen/space_8"
+                        android:text="@string/desc_smb_port" />
 
                     <EditText
                         android:id="@+id/et_smb_port"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        style="@style/XmInput"
                         android:text="445"
                         android:inputType="number"
-                        android:textColor="@color/text_primary"
-                        android:background="@drawable/bg_input"
-                        android:textColorHint="@color/text_hint"
-                        android:padding="12dp"
-                        android:layout_marginBottom="16dp" />
+                        android:layout_marginBottom="@dimen/field_gap" />
 
                     <TextView
+                        style="@style/XmTextLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/share_folder"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_secondary"
-                        android:layout_marginBottom="2dp" />
+                        android:layout_marginBottom="@dimen/label_gap"
+                        android:text="@string/share_folder" />
 
                     <TextView
+                        style="@style/XmTextCaption"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/desc_share_folder"
-                        android:textSize="12sp"
-                        android:textColor="@color/text_hint"
-                        android:layout_marginBottom="8dp" />
+                        android:layout_marginBottom="@dimen/space_8"
+                        android:text="@string/desc_share_folder" />
 
                     <EditText
                         android:id="@+id/et_smb_share"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        style="@style/XmInput"
                         android:hint="@string/share_folder_hint"
                         android:inputType="text"
-                        android:textColor="@color/text_primary"
-                        android:background="@drawable/bg_input"
-                        android:textColorHint="@color/text_hint"
-                        android:padding="12dp"
-                        android:layout_marginBottom="16dp" />
+                        android:layout_marginBottom="@dimen/field_gap" />
 
                     <TextView
+                        style="@style/XmTextLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/username_optional"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_secondary"
-                        android:layout_marginBottom="2dp" />
+                        android:layout_marginBottom="@dimen/label_gap"
+                        android:text="@string/username_optional" />
 
                     <TextView
+                        style="@style/XmTextCaption"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/desc_username"
-                        android:textSize="12sp"
-                        android:textColor="@color/text_hint"
-                        android:layout_marginBottom="8dp" />
+                        android:layout_marginBottom="@dimen/space_8"
+                        android:text="@string/desc_username" />
 
                     <EditText
                         android:id="@+id/et_smb_user"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        style="@style/XmInput"
                         android:hint="@string/username"
                         android:inputType="text"
-                        android:textColor="@color/text_primary"
-                        android:background="@drawable/bg_input"
-                        android:textColorHint="@color/text_hint"
-                        android:padding="12dp"
-                        android:layout_marginBottom="16dp" />
+                        android:layout_marginBottom="@dimen/field_gap" />
 
                     <TextView
+                        style="@style/XmTextLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/password"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_secondary"
-                        android:layout_marginBottom="2dp" />
+                        android:layout_marginBottom="@dimen/label_gap"
+                        android:text="@string/password" />
 
                     <TextView
+                        style="@style/XmTextCaption"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/desc_password"
-                        android:textSize="12sp"
-                        android:textColor="@color/text_hint"
-                        android:layout_marginBottom="8dp" />
+                        android:layout_marginBottom="@dimen/space_8"
+                        android:text="@string/desc_password" />
 
                     <EditText
                         android:id="@+id/et_smb_pass"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        style="@style/XmInput"
                         android:hint="@string/password"
-                        android:inputType="text"
-                        android:textColor="@color/text_primary"
-                        android:background="@drawable/bg_input"
-                        android:textColorHint="@color/text_hint"
-                        android:padding="12dp" />
+                        android:inputType="text" />
                 </LinearLayout>
 
-                <!-- WebDAV配置面板 -->
+                <!-- WebDAV 配置面板 -->
                 <LinearLayout
                     android:id="@+id/panel_webdav"
                     android:layout_width="match_parent"
@@ -384,95 +324,74 @@
                     android:visibility="gone">
 
                     <TextView
+                        style="@style/XmTextLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/server_address"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_secondary"
-                        android:layout_marginBottom="2dp" />
+                        android:layout_marginBottom="@dimen/label_gap"
+                        android:text="@string/server_address" />
 
                     <TextView
+                        style="@style/XmTextCaption"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/desc_webdav_url"
-                        android:textSize="12sp"
-                        android:textColor="@color/text_hint"
-                        android:layout_marginBottom="8dp" />
+                        android:layout_marginBottom="@dimen/space_8"
+                        android:text="@string/desc_webdav_url" />
 
                     <EditText
                         android:id="@+id/et_webdav_url"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        style="@style/XmInput"
                         android:hint="@string/webdav_url_hint"
                         android:inputType="textUri"
-                        android:textColor="@color/text_primary"
-                        android:background="@drawable/bg_input"
-                        android:textColorHint="@color/text_hint"
-                        android:padding="12dp"
-                        android:layout_marginBottom="8dp" />
+                        android:layout_marginBottom="@dimen/space_8" />
 
                     <TextView
+                        style="@style/XmTextCaption"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginBottom="@dimen/field_gap"
                         android:text="@string/webdav_https_required"
-                        android:textSize="12sp"
-                        android:textColor="@color/danger"
-                        android:layout_marginBottom="16dp" />
+                        android:textColor="@color/danger" />
 
                     <TextView
+                        style="@style/XmTextLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/username"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_secondary"
-                        android:layout_marginBottom="2dp" />
+                        android:layout_marginBottom="@dimen/label_gap"
+                        android:text="@string/username" />
 
                     <TextView
+                        style="@style/XmTextCaption"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/desc_username"
-                        android:textSize="12sp"
-                        android:textColor="@color/text_hint"
-                        android:layout_marginBottom="8dp" />
+                        android:layout_marginBottom="@dimen/space_8"
+                        android:text="@string/desc_username" />
 
                     <EditText
                         android:id="@+id/et_webdav_user"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        style="@style/XmInput"
                         android:hint="@string/username"
                         android:inputType="text"
-                        android:textColor="@color/text_primary"
-                        android:background="@drawable/bg_input"
-                        android:textColorHint="@color/text_hint"
-                        android:padding="12dp"
-                        android:layout_marginBottom="16dp" />
+                        android:layout_marginBottom="@dimen/field_gap" />
 
                     <TextView
+                        style="@style/XmTextLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/password"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_secondary"
-                        android:layout_marginBottom="2dp" />
+                        android:layout_marginBottom="@dimen/label_gap"
+                        android:text="@string/password" />
 
                     <TextView
+                        style="@style/XmTextCaption"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/desc_password"
-                        android:textSize="12sp"
-                        android:textColor="@color/text_hint"
-                        android:layout_marginBottom="8dp" />
+                        android:layout_marginBottom="@dimen/space_8"
+                        android:text="@string/desc_password" />
 
                     <EditText
                         android:id="@+id/et_webdav_pass"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        style="@style/XmInput"
                         android:hint="@string/password"
-                        android:inputType="text"
-                        android:textColor="@color/text_primary"
-                        android:background="@drawable/bg_input"
-                        android:textColorHint="@color/text_hint"
-                        android:padding="12dp" />
+                        android:inputType="text" />
                 </LinearLayout>
             </LinearLayout>
         </LinearLayout>
@@ -485,34 +404,32 @@
             android:orientation="vertical"
             android:visibility="gone">
 
-            <!-- 自定义HTTP脚本配置卡片 -->
+            <!-- 自定义 HTTP 脚本配置卡片 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:background="@drawable/bg_card"
-                android:padding="16dp"
-                android:layout_marginBottom="16dp">
+                android:padding="@dimen/card_padding"
+                android:layout_marginBottom="@dimen/card_gap">
 
                 <TextView
+                    style="@style/XmTextLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/custom_script"
-                    android:textSize="13sp"
-                    android:textColor="@color/text_secondary"
-                    android:layout_marginBottom="2dp" />
+                    android:layout_marginBottom="@dimen/label_gap"
+                    android:text="@string/custom_script" />
 
                 <TextView
+                    style="@style/XmTextCaption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/custom_script_intro"
-                    android:textSize="12sp"
-                    android:textColor="@color/text_hint"
-                    android:layout_marginBottom="8dp" />
+                    android:layout_marginBottom="@dimen/space_8"
+                    android:text="@string/custom_script_intro" />
 
                 <EditText
                     android:id="@+id/et_custom_script"
-                    android:layout_width="match_parent"
+                    style="@style/XmInput"
                     android:layout_height="240dp"
                     android:gravity="top|start"
                     android:hint="@string/custom_script_hint"
@@ -520,41 +437,33 @@
                     android:scrollbars="vertical"
                     android:overScrollMode="ifContentScrolls"
                     android:fontFamily="monospace"
-                    android:textSize="12sp"
-                    android:textColor="@color/text_primary"
-                    android:background="@drawable/bg_input"
-                    android:textColorHint="@color/text_hint"
-                    android:padding="12dp"
-                    android:layout_marginBottom="8dp" />
+                    android:textSize="@dimen/text_caption"
+                    android:layout_marginBottom="@dimen/space_8" />
 
-                <!-- 提示：下方还有脚本配置项与保存按钮，可下滑查看 -->
                 <TextView
+                    style="@style/XmTextCaption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/script_below_hint"
-                    android:textSize="12sp"
-                    android:textColor="@color/text_hint"
-                    android:layout_marginBottom="8dp" />
+                    android:layout_marginBottom="@dimen/space_8"
+                    android:text="@string/script_below_hint" />
 
                 <!-- 占位符配置项（%*名称*% → 自动生成下方输入框，运行期替换进脚本） -->
                 <TextView
                     android:id="@+id/tv_script_vars_title"
+                    style="@style/XmTextLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/label_gap"
                     android:text="@string/script_vars_title"
-                    android:textSize="13sp"
-                    android:textColor="@color/text_secondary"
-                    android:layout_marginBottom="2dp"
                     android:visibility="gone" />
 
                 <TextView
                     android:id="@+id/tv_script_vars_hint"
+                    style="@style/XmTextCaption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/space_8"
                     android:text="@string/script_vars_hint"
-                    android:textSize="12sp"
-                    android:textColor="@color/text_hint"
-                    android:layout_marginBottom="8dp"
                     android:visibility="gone" />
 
                 <LinearLayout
@@ -568,12 +477,8 @@
 
         <Button
             android:id="@+id/btn_save"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/test_then_save"
-            android:textColor="@color/primary_text_on"
-            android:background="@drawable/bg_button_primary"
-            android:textSize="15sp" />
+            style="@style/XmButtonPrimary"
+            android:text="@string/test_then_save" />
 
         <LinearLayout
             android:id="@+id/testing_panel"
@@ -582,69 +487,73 @@
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:visibility="gone"
-            android:layout_marginTop="12dp">
+            android:layout_marginTop="@dimen/space_12">
 
             <ProgressBar
                 android:layout_width="24dp"
                 android:layout_height="24dp"
-                android:layout_marginEnd="8dp" />
+                android:layout_marginEnd="@dimen/space_8" />
 
             <TextView
+                style="@style/XmTextBody"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/testing_connection"
-                android:textSize="14sp"
                 android:textColor="@color/text_secondary" />
         </LinearLayout>
 
-        <!-- 底部：Powered by + 如何自定义脚本（白色下划线） -->
+        <!-- 底部：Powered by + 作者 + 脚本帮助 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center"
-            android:layout_marginTop="16dp"
-            android:layout_marginBottom="8dp">
+            android:layout_marginTop="@dimen/space_16">
 
             <TextView
                 android:id="@+id/tv_footer"
+                style="@style/XmTextCaption"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/footer_text"
-                android:textSize="12sp"
-                android:textColor="@color/text_hint" />
+                android:text="@string/footer_text" />
 
             <TextView
                 android:id="@+id/tv_footer_zgcwkj"
+                style="@style/XmTextCaption"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/author"
-                android:textSize="12sp"
-                android:textColor="@color/primary"
                 android:clickable="true"
-                android:focusable="true" />
+                android:focusable="true"
+                android:paddingStart="@dimen/space_4"
+                android:paddingEnd="@dimen/space_4"
+                android:text="@string/author"
+                android:textColor="@color/brand" />
 
             <TextView
                 android:id="@+id/tv_footer_suileyan"
+                style="@style/XmTextCaption"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/footer_suileyan"
-                android:textSize="12sp"
-                android:textColor="@color/primary"
                 android:clickable="true"
-                android:focusable="true" />
+                android:focusable="true"
+                android:paddingStart="@dimen/space_4"
+                android:paddingEnd="@dimen/space_4"
+                android:text="@string/footer_suileyan"
+                android:textColor="@color/brand" />
 
             <TextView
                 android:id="@+id/tv_script_help"
+                style="@style/XmTextCaption"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
-                android:text="@string/script_help_link"
-                android:textSize="12sp"
-                android:textColor="@color/text_primary"
-                android:textStyle="bold"
+                android:layout_marginStart="@dimen/space_16"
                 android:clickable="true"
-                android:focusable="true" />
+                android:focusable="true"
+                android:paddingStart="@dimen/space_4"
+                android:paddingEnd="@dimen/space_4"
+                android:text="@string/script_help_link"
+                android:textColor="@color/text_primary"
+                android:textStyle="bold" />
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

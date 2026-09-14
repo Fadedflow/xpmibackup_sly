@@ -1,16 +1,236 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  小米（HyperOS）风格样式表 —— 浅色
+  ─────────────────────────────────────────────────────────────
+  设计语言主线：克制（表面全中性，品牌橙只做点缀）、层级靠不透明度、
+  圆角阶梯化、交互反馈走合成层（transform / alpha）。
+  字体：遵循「米家扩展避免自定义字体」原则，统一使用系统默认字体
+  （HyperOS 下即 MiSans），字重仅用 bold 切换（Android 上中间字重无效）。
+-->
 <resources>
-    <!-- 全局主题：LSPosed 风格浅色 -->
+
+    <!-- ==================== 主题 ==================== -->
     <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:colorPrimary">@color/primary</item>
-        <item name="android:colorPrimaryDark">@color/primary_dark</item>
-        <item name="android:colorAccent">@color/primary</item>
+        <item name="android:colorPrimary">@color/brand</item>
+        <item name="android:colorPrimaryDark">@color/brand_pressed</item>
+        <item name="android:colorAccent">@color/brand</item>
         <item name="android:windowBackground">@color/background</item>
         <item name="android:statusBarColor">@color/status_bar</item>
-        <item name="android:colorControlActivated">@color/primary</item>
-        <item name="android:colorControlHighlight">@color/tab_selected_bg</item>
+        <item name="android:navigationBarColor">@color/background</item>
+        <item name="android:colorControlActivated">@color/brand</item>
+        <item name="android:colorControlHighlight">@color/ripple</item>
         <item name="android:textColorPrimary">@color/text_primary</item>
         <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:textColorHint">@color/text_hint</item>
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:alertDialogTheme">@style/XmDialogTheme</item>
     </style>
+
+    <!-- 对话框：圆角 + 中性表面（官方 L2：弹窗不得覆盖整屏、不得横向拉满） -->
+    <style name="XmDialogTheme" parent="android:Theme.Material.Light.Dialog.Alert">
+        <item name="android:colorAccent">@color/brand</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:windowBackground">@drawable/bg_dialog</item>
+        <item name="android:windowMinWidthMajor">72%</item>
+        <item name="android:windowMinWidthMinor">86%</item>
+    </style>
+
+    <!-- ==================== 文字层级 ==================== -->
+    <!-- 页面主标题（顶栏） -->
+    <style name="XmTextPageTitle" parent="@android:style/TextAppearance.Material.Title">
+        <item name="android:textSize">@dimen/text_page_title</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:letterSpacing">0.01</item>
+    </style>
+
+    <!-- 区块 / 卡片标题 -->
+    <style name="XmTextSection" parent="@android:style/TextAppearance.Material.Subhead">
+        <item name="android:textSize">@dimen/text_section</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:lineSpacingMultiplier">1.3</item>
+    </style>
+
+    <!-- 字段标签 -->
+    <style name="XmTextLabel" parent="@android:style/TextAppearance.Material.Body2">
+        <item name="android:textSize">@dimen/text_label</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:lineSpacingMultiplier">1.3</item>
+    </style>
+
+    <!-- 正文 -->
+    <style name="XmTextBody" parent="@android:style/TextAppearance.Material.Body1">
+        <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:lineSpacingMultiplier">1.45</item>
+    </style>
+
+    <!-- 说明 / 提示（次要信息，官方手法：同色降不透明度） -->
+    <style name="XmTextCaption" parent="@android:style/TextAppearance.Material.Caption">
+        <item name="android:textSize">@dimen/text_caption</item>
+        <item name="android:textColor">@color/text_hint</item>
+        <item name="android:lineSpacingMultiplier">1.4</item>
+    </style>
+
+    <!-- ==================== 容器 ==================== -->
+    <!-- 卡片：中性表面 + 1px 内描边，不加投影（官网实测：全站 hover 只有不透明度，
+         投影只留给悬浮层） -->
+    <style name="XmCard">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:background">@drawable/bg_card</item>
+        <item name="android:padding">@dimen/card_padding</item>
+        <item name="android:layout_marginBottom">@dimen/card_gap</item>
+    </style>
+
+    <!-- 小卡片（单行信息 / 勾选项） -->
+    <style name="XmCardRow" parent="XmCard">
+        <item name="android:background">@drawable/bg_card</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:padding">@dimen/space_16</item>
+        <item name="android:layout_marginBottom">@dimen/card_gap</item>
+    </style>
+
+    <!-- ==================== 表单控件 ==================== -->
+    <style name="XmInput" parent="@android:style/Widget.Material.EditText">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:background">@drawable/bg_input</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textColorHint">@color/text_hint</item>
+        <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:minHeight">@dimen/touch_target_min</item>
+        <item name="android:paddingStart">@dimen/space_12</item>
+        <item name="android:paddingEnd">@dimen/space_12</item>
+        <item name="android:paddingTop">@dimen/space_12</item>
+        <item name="android:paddingBottom">@dimen/space_12</item>
+        <item name="android:textCursorDrawable">@drawable/bg_cursor</item>
+    </style>
+
+    <style name="XmSwitch" parent="@android:style/Widget.Material.CompoundButton.Switch">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">@dimen/touch_target_min</item>
+    </style>
+
+    <style name="XmRadio" parent="@android:style/Widget.Material.CompoundButton.RadioButton">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">@dimen/touch_target_min</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">@dimen/text_body</item>
+    </style>
+
+    <style name="XmCheckBox" parent="@android:style/Widget.Material.CompoundButton.CheckBox">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">@dimen/touch_target_min</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">@dimen/text_body</item>
+    </style>
+
+    <!-- ==================== 按钮 ==================== -->
+    <style name="XmButton" parent="@android:style/Widget.Material.Button">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">@dimen/touch_target_min</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:letterSpacing">0.02</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:gravity">center</item>
+    </style>
+
+    <!--
+      以下 4 个按钮变体必须显式继承 XmButton。
+      layout_width / layout_height / minHeight / textAllCaps / stateListAnimator 等都定义在
+      XmButton 上，若缺 parent，<Button style="@style/XmButtonPrimary"> 且未显式写
+      layout_width 时，inflate 会抛
+        UnsupportedOperationException: You must supply a layout_width attribute
+      并被包装成 InflateException —— 表现为打开对应页面即闪退。
+    -->
+
+    <!-- 主 CTA：品牌橙填充，每屏只出现一次（克制原则） -->
+    <style name="XmButtonPrimary" parent="XmButton">
+        <item name="android:background">@drawable/bg_button_primary</item>
+        <item name="android:textColor">@color/text_on_brand</item>
+    </style>
+
+    <!-- 次按钮：透明底 + 中性描边 -->
+    <style name="XmButtonSecondary" parent="XmButton">
+        <item name="android:background">@drawable/bg_button_secondary</item>
+        <item name="android:textColor">@color/text_primary</item>
+    </style>
+
+    <style name="XmButtonDanger" parent="XmButton">
+        <item name="android:background">@drawable/bg_button_danger</item>
+        <item name="android:textColor">@color/text_on_brand</item>
+    </style>
+
+    <!-- 小尺寸按钮（列表行内）：覆盖 XmButton 的 match_parent 为 wrap_content -->
+    <style name="XmButtonSmall" parent="XmButton">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:textSize">@dimen/text_caption</item>
+        <item name="android:paddingStart">@dimen/space_12</item>
+        <item name="android:paddingEnd">@dimen/space_12</item>
+        <item name="android:paddingTop">0dp</item>
+        <item name="android:paddingBottom">0dp</item>
+    </style>
+
+    <!-- ==================== 顶部标题栏 ==================== -->
+    <style name="XmTopBar">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">@dimen/top_bar_height</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:background">@color/background</item>
+        <item name="android:paddingStart">@dimen/space_20</item>
+        <item name="android:paddingEnd">@dimen/space_8</item>
+    </style>
+
+    <!-- 顶栏图标按钮：40dp 圆形触控区，ripple 反馈 -->
+    <style name="XmTopBarIconButton">
+        <item name="android:layout_width">@dimen/touch_target_min</item>
+        <item name="android:layout_height">@dimen/touch_target_min</item>
+        <item name="android:gravity">center</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:background">@drawable/bg_icon_button</item>
+    </style>
+
+    <!-- ==================== 悬浮底栏 ==================== -->
+    <style name="XmFloatingBar">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">@dimen/floating_bar_height</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center</item>
+        <item name="android:background">@drawable/bg_floating_bar</item>
+        <item name="android:elevation">10dp</item>
+        <item name="android:paddingStart">@dimen/space_8</item>
+        <item name="android:paddingEnd">@dimen/space_8</item>
+        <item name="android:paddingTop">@dimen/space_6</item>
+        <item name="android:paddingBottom">@dimen/space_6</item>
+    </style>
+
+    <!-- 底栏单项：48dp 最小触控目标，已选为品牌色淡底胶囊 -->
+    <style name="XmNavItem">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:background">@drawable/bg_nav_item</item>
+        <item name="android:foreground">@drawable/ripple_nav_item</item>
+    </style>
+
 </resources>

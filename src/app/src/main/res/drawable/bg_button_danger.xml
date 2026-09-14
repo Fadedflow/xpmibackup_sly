@@ -1,15 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:state_pressed="true">
-        <shape android:shape="rectangle">
-            <solid android:color="#B3261E" />
-            <corners android:radius="10dp" />
-        </shape>
-    </item>
+<!-- 危险操作按钮：语义红填充（破坏性操作先声明后果） -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/ripple_on_brand">
     <item>
         <shape android:shape="rectangle">
             <solid android:color="@color/danger" />
-            <corners android:radius="10dp" />
+            <corners android:radius="@dimen/radius_button" />
         </shape>
     </item>
-</selector>
+</ripple>

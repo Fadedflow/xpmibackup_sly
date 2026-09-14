@@ -1,44 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 脚本帮助页（overlay 二级页面）：标题 + 返回键 + 等宽帮助正文 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@color/background">
 
-    <!-- 标题行：标题 + 返回键 -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="@dimen/top_bar_height"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingStart="24dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="16dp"
-        android:paddingBottom="12dp">
+        android:paddingStart="@dimen/space_20"
+        android:paddingEnd="@dimen/space_8">
 
         <TextView
             android:id="@+id/tv_help_title"
+            style="@style/XmTextPageTitle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/script_help_title"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:textColor="@color/text_primary" />
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="@string/script_help_title" />
 
         <Button
             android:id="@+id/btn_help_back"
+            style="@style/XmButtonPrimary"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/back"
-            android:textColor="@color/primary_text_on"
-            android:background="@drawable/bg_button_primary"
-            android:textSize="14sp"
-            android:paddingStart="20dp"
-            android:paddingEnd="20dp" />
+            android:text="@string/back" />
     </LinearLayout>
 
-    <!-- 帮助内容 -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -47,16 +39,16 @@
 
         <TextView
             android:id="@+id/tv_help_content"
+            style="@style/XmTextBody"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:fontFamily="monospace"
-            android:textSize="13sp"
+            android:textSize="@dimen/text_label"
             android:lineSpacingExtra="4dp"
-            android:textColor="@color/text_primary"
-            android:textColorLink="@color/primary"
-            android:paddingStart="24dp"
-            android:paddingEnd="24dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="24dp" />
+            android:textColorLink="@color/brand"
+            android:paddingStart="@dimen/page_padding_h"
+            android:paddingEnd="@dimen/page_padding_h"
+            android:paddingTop="@dimen/space_8"
+            android:paddingBottom="@dimen/page_padding_bottom" />
     </ScrollView>
 </LinearLayout>

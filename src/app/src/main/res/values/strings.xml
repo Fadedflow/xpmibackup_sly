@@ -12,6 +12,7 @@
     <string name="action_backup">备份</string>
     <string name="settings_title">设置</string>
     <string name="about_title">关于</string>
+    <string name="more_menu">更多</string>
     <string name="theme_mode">应用主题</string>
     <string name="theme_system">跟随系统</string>
     <string name="theme_day">白昼</string>
@@ -37,6 +38,7 @@
     <string name="title_account_config">云盘账号</string>
     <string name="title_backup_config">备份</string>
 
+    <string name="device_info_section">设备信息</string>
     <string name="device_name">设备名称</string>
     <string name="device_name_hint">例: 远程备份设备</string>
     <string name="device_description">设备描述</string>

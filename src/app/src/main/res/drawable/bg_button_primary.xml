@@ -1,15 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:state_pressed="true">
-        <shape android:shape="rectangle">
-            <solid android:color="@color/primary_dark" />
-            <corners android:radius="10dp" />
-        </shape>
-    </item>
+<!-- 主 CTA：品牌橙填充 + ripple 光效反馈（官方「点按有光」） -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/ripple_on_brand">
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="@color/primary" />
-            <corners android:radius="10dp" />
+            <solid android:color="@color/brand" />
+            <corners android:radius="@dimen/radius_button" />
         </shape>
     </item>
-</selector>
+</ripple>
