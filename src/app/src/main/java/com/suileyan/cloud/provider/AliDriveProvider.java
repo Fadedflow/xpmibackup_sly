@@ -117,6 +117,7 @@ public class AliDriveProvider implements CloudProvider {
 
     @Override
     public List<String> listDirs() throws CloudException {
+        ensureIdentityKeys();
         var out = new ArrayList<String>();
         for (var e : listChildren("root")) {
             if (e.isDir) out.add(e.name);
@@ -126,6 +127,7 @@ public class AliDriveProvider implements CloudProvider {
 
     @Override
     public List<RemoteEntry> listEntries(String remoteDir) throws CloudException {
+        ensureIdentityKeys();
         var parentId = resolvePath(remoteDir, false);
         if (parentId == null) return new ArrayList<>();
         var out = new ArrayList<RemoteEntry>();
@@ -137,6 +139,7 @@ public class AliDriveProvider implements CloudProvider {
 
     @Override
     public void mkdirs(String remoteDir) throws CloudException {
+        ensureIdentityKeys();
         resolvePath(remoteDir, true);
     }
 
@@ -155,6 +158,7 @@ public class AliDriveProvider implements CloudProvider {
             throw new CloudException(CloudException.Kind.LOCAL, "file not found: " + localPath);
         }
         try {
+            ensureIdentityKeys();
             var parentId = resolvePath(remoteDir, true);
             if (cb != null) cb.onStart(taskId);
             var size = localFile.length();
@@ -280,6 +284,7 @@ public class AliDriveProvider implements CloudProvider {
     @Override
     public String downloadFile(String remotePath, String localPath) throws CloudException {
         try {
+            ensureIdentityKeys();
             var remote = trimSlashes(remotePath);
             var entry = findEntry(pathParent(remote), pathName(remote));
             if (entry == null || entry.fileId.isEmpty()) {
@@ -343,6 +348,7 @@ public class AliDriveProvider implements CloudProvider {
         try {
             var remote = trimSlashes(remotePath);
             if (remote.isEmpty()) return;
+            ensureIdentityKeys();
             var entry = findEntry(pathParent(remote), pathName(remote));
             if (entry == null || entry.fileId.isEmpty()) return;
             var body = new JSONObject();
@@ -465,13 +471,14 @@ public class AliDriveProvider implements CloudProvider {
 
     /** 注册设备公钥（首次签名 403/签名失效时触发，对齐 alist createSession） */
     private void createSession() throws CloudException {
-        ensureIdentityKeys();
+        var identity = ensureIdentityKeys();
         var body = new JSONObject();
         try {
             body.put("deviceName", "samsung");
             body.put("modelName", "SM-G9810");
             body.put("nonce", 0);
-            body.put("pubKey", hex(Secp256k1.publicKey(deviceKey())));
+            body.put("pubKey", hex(Secp256k1.publicKey(deviceKeyFromMessage(
+                    SECP_APP_ID + ":" + identity.deviceId + ":" + identity.uid + ":0"))));
             body.put("refreshToken", EncryptedCredStore.get(id(), "refresh_token"));
         } catch (Exception e) {
             throw new CloudException(CloudException.Kind.REMOTE, e);
@@ -506,20 +513,14 @@ public class AliDriveProvider implements CloudProvider {
         h.put("x-request-id", UUID.randomUUID().toString());
         h.put("X-Canary", "client=Android,app=adrive,version=v4.1.0");
         var uid = EncryptedCredStore.get(id(), "user_id");
-        if (uid.isEmpty()) {
-            // 身份未建立（历史崩溃导致 user/get 没跑完）：先补建身份（user/get 允许空签名），
-            // 避免后续所有带签名的业务请求因缺 user_id 全部报「签名派生失败」
-            try {
-                uid = ensureIdentityKeys().uid;
-            } catch (Exception e) {
-                LogHelp.w(TAG, "阿里云盘身份建立失败（签名缺 user_id）: " + e.getMessage());
-            }
-        }
         if (!uid.isEmpty()) {
             ensureSignature(uid);
             h.put("X-Device-Id", deviceId);
             h.put("X-Signature", signature);
         }
+        // user_id 为空时不带签名头——这是 /v2/user/get 建身份的合法状态；
+        // 其它端点在 user_id 缺失时由调用入口先 ensureIdentityKeys()（不再在 apiHeaders 内反向触发，
+        // 避免 apiHeaders ↔ ensureIdentityKeys ↔ testConnection ↔ request 死循环）
         return h;
     }
 
@@ -544,19 +545,13 @@ public class AliDriveProvider implements CloudProvider {
         }
     }
 
-    /** 确保 deviceId / signature 已派生；未派生则按 user_id 计算（签名仅依赖 user_id，可离线复算） */
+    /** 确保 deviceId / signature 已派生（委托 deriveSignature，离线可复算） */
     private void ensureSignature(String uid) {
-        if (uid.equals(userId) && signature != null) return;
-        try {
-            userId = uid;
-            deviceId = sha256Hex(uid);
-            var message = SECP_APP_ID + ":" + deviceId + ":" + uid + ":0";
-            var hash = MessageDigest.getInstance("SHA-256").digest(message.getBytes(StandardCharsets.UTF_8));
-            signature = hex(Secp256k1.sign(hash, deviceKey()));
-        } catch (Exception e) {
-            // 派生失败不再静默置空（会污染后续所有带签名请求）：保留旧值并告警
-            LogHelp.e(TAG, "阿里云盘签名派生失败（user_id 前 8 位 " + uid.substring(0, Math.min(8, uid.length())) + "）", e);
-        }
+        var identity = deriveSignature(uid);
+        if (identity.uid.isEmpty()) return;
+        userId = identity.uid;
+        deviceId = identity.deviceId;
+        signature = identity.signature;
     }
 
     /** 建立/补齐身份（user_id / drive_id / nickname），返回当前身份 */
@@ -570,13 +565,67 @@ public class AliDriveProvider implements CloudProvider {
         if (uid.isEmpty()) {
             throw new CloudException(CloudException.Kind.AUTH_EXPIRED, "阿里云盘身份不可用，请重新登录");
         }
-        ensureSignature(uid);
-        return new Identity(uid, deviceId, signature);
+        var identity = deriveSignature(uid);
+        return new Identity(identity.uid, identity.deviceId, identity.signature);
     }
 
-    private byte[] deviceKey() {
-        // 私钥 = SHA-256(user_id) 的 hex 字符串再取字节（对齐 alist：deviceID 即私钥 hex）
-        return deviceId.getBytes(StandardCharsets.US_ASCII);
+    /** 按 user_id 派生 secp256k1 签名三要素（deviceId / signature），不触发任何网络请求 */
+    private Identity deriveSignature(String uid) {
+        if (uid.equals(userId) && signature != null) {
+            return new Identity(uid, deviceId, signature);
+        }
+        var hex = sha256Hex(uid);
+        var message = SECP_APP_ID + ":" + hex + ":" + uid + ":0";
+        var sig = hexSecp256k1(message);
+        return new Identity(uid, hex, sig);
+    }
+
+    private String sha256Hex(String text) {
+        try {
+            var digest = MessageDigest.getInstance("SHA-256");
+            var hash = digest.digest(text.getBytes(StandardCharsets.UTF_8));
+            var sb = new StringBuilder(hash.length * 2);
+            for (var b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private String hexSecp256k1(String message) {
+        try {
+            var hash = MessageDigest.getInstance("SHA-256").digest(message.getBytes(StandardCharsets.UTF_8));
+            var key = deviceKeyFromMessage(message);
+            var sig = com.suileyan.comm.Secp256k1.sign(hash, key);
+            var sb = new StringBuilder(sig.length * 2);
+            for (var b : sig) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            LogHelp.e(TAG, "阿里云盘签名派生失败（消息: " + truncate(message, 32) + "）", e);
+            return signature != null ? signature : "";
+        }
+    }
+
+    /**
+     * 派生 secp256k1 私钥（32 字节大端，按 hex 解码）。
+     *
+     * 对齐 alist：deviceID = SHA-256(user_id) 的 hex 字符串，即私钥本身。
+     * 注意必须按 16 进制**解码回 32 字节**；若直接把 64 位 hex 的 ASCII 字节当私钥，
+     * Secp256k1.sign 的 `new BigInteger(1, bytes)` 会解析出远超群阶 N 的值 → "invalid private key"。
+     */
+    private byte[] deviceKeyFromMessage(String message) {
+        // message 形如 "SECP_APP_ID:DEVICE_ID_HEX:USER_ID:0"，DEVICE_ID_HEX 是第 2 段
+        var parts = message.split(":");
+        var hex = parts.length >= 2 ? parts[1] : "";
+        if (hex.isEmpty()) return new byte[32];
+        var b = new java.math.BigInteger(1, hex.getBytes(StandardCharsets.US_ASCII)).toByteArray();
+        var out = new byte[32];
+        if (b.length > 32) {
+            System.arraycopy(b, b.length - 32, out, 0, 32);
+        } else {
+            System.arraycopy(b, 0, out, 32 - b.length, b.length);
+        }
+        return out;
     }
 
     // ========== 路径解析 ==========
@@ -584,7 +633,8 @@ public class AliDriveProvider implements CloudProvider {
     private String driveId() throws CloudException {
         var did = EncryptedCredStore.get(id(), "drive_id");
         if (!did.isEmpty()) return did;
-        testConnection();
+        // 统一走身份入口（user/get 建身份），不在这里直接 testConnection 制造第二条递归路径
+        ensureIdentityKeys();
         did = EncryptedCredStore.get(id(), "drive_id");
         if (did.isEmpty()) {
             throw new CloudException(CloudException.Kind.REMOTE, "阿里云盘缺少 drive_id");
@@ -746,11 +796,6 @@ public class AliDriveProvider implements CloudProvider {
     }
 
     // ========== 工具 ==========
-
-    private static String sha256Hex(String text) throws Exception {
-        var digest = MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8));
-        return hex(digest);
-    }
 
     private static String hex(byte[] bytes) {
         var out = new StringBuilder(bytes.length * 2);
