@@ -232,6 +232,10 @@
     <string name="pc_rescan">重新扫描</string>
     <string name="pc_need_connect">请先连接电脑</string>
     <string name="root_modules_backup">同时备份 Root 模块（Magisk/KernelSU/APatch，需授予 Root）</string>
+    <string name="auto_delete_local">上传完成后自动删除本地备份文件</string>
+    <string name="auto_delete_local_hint">节省剩余空间，避免小存储机型备份失败</string>
+    <string name="serial_upload">逐项备份（一项 100% 后再备份下一项）</string>
+    <string name="serial_upload_hint">默认多项并行，进度会「各 30% 一起补全」</string>
     <string name="root_modules_packing">正在打包 Root 模块…</string>
     <string name="root_modules_pack_fail">Root 模块打包失败，本次备份将不含模块：</string>
     <string name="root_modules_title">Root 模块</string>

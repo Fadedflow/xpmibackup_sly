@@ -51,3 +51,6 @@ pc/harness/build/
 pc/harness/harness_out.txt
 pc/harness_out.txt
 pc/blackbox_out.txt
+
+# 目标应用反编译产物（jadx 生成，仅供分析，不同步）
+decompiled_xpbackup/

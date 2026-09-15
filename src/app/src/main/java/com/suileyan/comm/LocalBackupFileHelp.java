@@ -64,6 +64,19 @@ public final class LocalBackupFileHelp {
     }
 
     /**
+     * 单文件删除（不存在静默跳过；删除失败记 error 日志）。
+     * 与 {@link #deleteEmptyDirsUntilTempRoot} 配合可先删文件再清空目录。
+     */
+    public static void deleteFile(File file) {
+        if (file == null) {
+            return;
+        }
+        if (file.exists() && !file.delete()) {
+            logError("delete local file failed", new IllegalStateException(file.getAbsolutePath()));
+        }
+    }
+
+    /**
      * 从文件描述符反查真实路径，AIDL只传虚拟远端路径时使用
      */
     private static String readFdPath(ParcelFileDescriptor pfd) {

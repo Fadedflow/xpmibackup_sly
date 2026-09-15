@@ -76,8 +76,10 @@ public class AIDLHook {
     };
 
     /**
-     * 获取上传线程池，允许通过配置控制并发上传数量
-     * 双重检查锁定：避免 check-then-act 竞态导致线程池泄漏（CRIT-05）
+     * 获取上传线程池，允许通过配置控制并发上传数量。
+     * 双重检查锁定：避免 check-then-act 竞态导致线程池泄漏（CRIT-05）。
+     * 当「串行上传」开关（serial_upload=on）开启时，线程池被钳到 1，
+     * 宿主按「一项 100% 完成才下一项」推进；否则沿用 upload_threads 值。
      */
     private static ExecutorService getUploadExecutor() {
         var e = uploadExecutor;
@@ -87,7 +89,10 @@ public class AIDLHook {
         synchronized (AIDLHook.class) {
             e = uploadExecutor;
             if (e == null || e.isShutdown()) {
-                e = Executors.newFixedThreadPool(Math.max(1, ConfigHelp.getInt("upload_threads", 3)), DAEMON_THREAD_FACTORY);
+                var threads = "on".equals(com.suileyan.comm.ConfigHelp.getString("serial_upload", "off"))
+                        ? 1
+                        : Math.max(1, com.suileyan.comm.ConfigHelp.getInt("upload_threads", 3));
+                e = Executors.newFixedThreadPool(threads, DAEMON_THREAD_FACTORY);
                 uploadExecutor = e;
             }
             return e;
@@ -1019,6 +1024,7 @@ public class AIDLHook {
         var remoteDir = extractRemoteDir(remotePath);
         var fileName = extractFileName(remotePath);
         var localFile = LocalBackupFileHelp.resolveUploadFile(pfd, aidlPath);
+        var sourceFile = localFile; // 宿主写好的原始备份文件；auto_delete_local 成功后删除此文件
         var copiedTempFile = (java.io.File) null;
         if (localFile != null && localFile.exists()) {
             // 复制到独立临时副本再上传：备份流程可能在上传期间删除源文件
@@ -1053,6 +1059,9 @@ public class AIDLHook {
                 uploadLocalDescriptorIfPresent(localFile.getParentFile(), remoteDir);
                 CloudFileHelp.cleanupOldBackups();
                 BackupHook.clearActiveBackupDirs();
+            } else {
+                // 上传成功 → 按开关自动删除本地源文件（0 字节 end 标记与 descript 独立处理）
+                deleteLocalSourceAfterUpload(sourceFile);
             }
         } finally {
             if (copiedTempFile != null) {
@@ -1179,6 +1188,24 @@ public class AIDLHook {
         if (file != null && file.exists() && !file.delete()) {
             logError("delete temp file failed", new IllegalStateException(file.getAbsolutePath()));
         }
+    }
+
+    /**
+     * 上传成功后自动删除本地源文件（auto_delete_local=on 时）。
+     * 仅删除宿主 w1 传进来的原始备份文件（resolveUploadFile 命中的 /sdcard/MIUI/backup/AllBackupTemp/… 下文件），
+     * 并顺手清空 AllBackupTemp 对应目录；copiedTempFile 副本仍由 finally 块统一删除，此处不重复。
+     * 0 字节 "end" 标记与 descript.xml 走独立路径，不经此处。
+     */
+    private void deleteLocalSourceAfterUpload(File sourceFile) {
+        if (!"on".equals(com.suileyan.comm.ConfigHelp.getString("auto_delete_local", "off"))) {
+            return;
+        }
+        if (sourceFile == null || !sourceFile.exists()) {
+            return;
+        }
+        com.suileyan.comm.LocalBackupFileHelp.deleteFile(sourceFile);
+        com.suileyan.comm.LocalBackupFileHelp.deleteEmptyDirsUntilTempRoot(sourceFile.getParentFile());
+        LogHelp.i(TAG, "auto_delete_local: 已删本地源文件 " + sourceFile.getAbsolutePath());
     }
 
     /**

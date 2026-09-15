@@ -232,6 +232,10 @@
     <string name="pc_rescan">Rescan</string>
     <string name="pc_need_connect">Connect a PC first</string>
     <string name="root_modules_backup">Also back up Root modules (Magisk/KernelSU/APatch, root required)</string>
+    <string name="auto_delete_local">Auto-delete local backup file after upload</string>
+    <string name="auto_delete_local_hint">Frees storage so small devices can complete backups</string>
+    <string name="serial_upload">Back up one item at a time (100% before next)</string>
+    <string name="serial_upload_hint">Default is parallel: several items advance at ~30% together</string>
     <string name="root_modules_packing">Packing Root modules...</string>
     <string name="root_modules_pack_fail">Failed to pack Root modules, this backup will not include them:</string>
     <string name="root_modules_title">Root modules</string>

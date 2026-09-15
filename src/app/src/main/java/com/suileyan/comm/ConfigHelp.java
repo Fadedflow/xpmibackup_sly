@@ -208,6 +208,8 @@ public class ConfigHelp {
         map.put("protocol", "smb");
         map.put("upload_threads", "3");
         map.put("chunk_size_mb", "64");
+        map.put("auto_delete_local", "off");
+        map.put("serial_upload", "off");
         map.put("smb_server", "192.168.68.1");
         map.put("smb_port", "445");
         map.put("smb_share", isChineseLocale() ? "备份数据" : "BackupData");
