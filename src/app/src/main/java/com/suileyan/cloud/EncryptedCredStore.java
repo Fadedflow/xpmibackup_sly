@@ -39,7 +39,8 @@ import javax.crypto.spec.SecretKeySpec;
 public final class EncryptedCredStore {
 
     private static final String TAG = "XpMiBackup";
-    private static final String CRED_FILE = "/sdcard/MIUI/backup/creds.json";
+    /** 凭据文件统一到 /MIUI/backup/sly/creds.json（由 ConfigHelp.ensureSlyLayout 首启自动迁移旧位置） */
+    private static final String CRED_FILE = com.suileyan.comm.ConfigHelp.credFile();
     private static final String TRANSFORM = "AES/GCM/NoPadding";
     private static final int GCM_TAG_BITS = 128;
     private static final int IV_LENGTH = 12;

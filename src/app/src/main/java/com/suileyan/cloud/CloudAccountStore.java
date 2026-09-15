@@ -20,7 +20,8 @@ import java.util.List;
 public final class CloudAccountStore {
 
     private static final String TAG = "XpMiBackup";
-    private static final String ACCOUNT_FILE = "/sdcard/MIUI/backup/cloud_accounts.json";
+    /** 账号文件统一到 /MIUI/backup/sly/cloud_accounts.json（由 ConfigHelp.ensureSlyLayout 首启自动迁移旧位置） */
+    private static final String ACCOUNT_FILE = com.suileyan.comm.ConfigHelp.cloudAccountFile();
     private static final String KEY_ACCOUNTS = "accounts";
 
     private CloudAccountStore() {

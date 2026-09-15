@@ -18,12 +18,12 @@ import java.util.Locale;
 /**
  * 统一处理应用日志输出，可按配置追加写入本地日志文件
  * 内置错误日志落盘：进程内环形缓冲近期日志，出现 error 级日志时
- * 自动把"出错前流程 + 错误详情"写入 /sdcard/MIUI/backup/logs/年月日_err.log
+ * 自动把"出错前流程 + 错误详情"写入 /sdcard/MIUI/backup/sly/logs/年月日_err.log
  */
 public class LogHelp {
     private static final String LOG_KEY = "log_enabled";
-    private static final String CONFIG_PATH = ConfigHelp.BACKUP_ROOT + "/config.ini";
-    private static final String LOG_DIR = ConfigHelp.BACKUP_ROOT + "/logs";
+    /** 日志/配置路径统一走 ConfigHelp.slyRoot() 下的 sly/ 子目录（首次由 ConfigHelp.ensureSlyLayout 迁移） */
+    private static final String LOG_DIR = com.suileyan.comm.ConfigHelp.logDir();
     /** 错误日志文件目录（与每日日志同目录） */
     private static final String ERR_LOG_DIR = LOG_DIR;
     /** 环形缓冲容量：出错时携带的流程日志条数 */
@@ -199,7 +199,7 @@ public class LogHelp {
      * 带 mtime 缓存：配置文件未变化时直接复用上次判定结果
      */
     private static boolean isFileLogEnabled() {
-        var file = new File(CONFIG_PATH);
+        var file = new File(com.suileyan.comm.ConfigHelp.configPath());
         var ts = file.exists() ? file.lastModified() : 0L;
         if (ts == sLogEnabledTs) {
             return sLogEnabledCached;

@@ -22,7 +22,8 @@ import java.util.List;
 public final class ProfileStore {
 
     private static final String TAG = "XpMiBackup";
-    private static final String PROFILE_FILE = "/sdcard/MIUI/backup/profiles.json";
+    /** 方案文件统一到 /MIUI/backup/sly/profiles.json（由 ConfigHelp.ensureSlyLayout 首启自动迁移旧位置） */
+    private static final String PROFILE_FILE = com.suileyan.comm.ConfigHelp.profileFile();
     private static final String KEY_PROFILES = "profiles";
     private static final String KEY_ACTIVE = "activeId";
 
