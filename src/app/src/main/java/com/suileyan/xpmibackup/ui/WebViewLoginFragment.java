@@ -1603,11 +1603,30 @@ public class WebViewLoginFragment extends Fragment {
             CloudAccountStore.add(new CloudAccount(id, CloudAccount.PROVIDER_ALIYUN,
                     nickname == null ? "" : nickname,
                     getString(R.string.cloud_provider_aliyun), System.currentTimeMillis()));
+            // 同一阿里云盘账号（同 user_id）只保留一个条目：历史崩溃/校验失败会留下
+            // 指向同一云盘账号的旧账号（缺 user_id 的坏条目），重复登录时一并清理
+            dedupeAliyunAccounts(id);
             LogHelp.i(TAG, "阿里云盘账号已保存: " + id);
             finishSave();
         } catch (Exception e) {
             LogHelp.e(TAG, "save 阿里云盘 account failed", e);
             Toast.makeText(getActivity(), R.string.toast_cloud_account_save_failed, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /** 清理与 newId 指向同一 user_id 的其它 aliyun 账号（凭据一并删除，避免遗留坏条目） */
+    private void dedupeAliyunAccounts(String newId) {
+        var newUid = EncryptedCredStore.get(newId, "user_id");
+        if (newUid.isEmpty()) return;
+        for (var a : CloudAccountStore.list()) {
+            if (!CloudAccount.PROVIDER_ALIYUN.equals(a.provider) || newId.equals(a.id)) continue;
+            var uid = EncryptedCredStore.get(a.id, "user_id");
+            if (newUid.equals(uid)) {
+                CloudAccountStore.remove(a.id);
+                EncryptedCredStore.removeAccount(a.id);
+                com.suileyan.cloud.CredentialChecker.invalidate(a.id);
+                LogHelp.i(TAG, "已清理重复阿里云盘账号: " + a.id + " (user_id=" + newUid + ")");
+            }
         }
     }
 

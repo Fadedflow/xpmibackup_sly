@@ -481,6 +481,17 @@ public class AliDriveProvider implements CloudProvider {
             throw new CloudException(CloudException.Kind.REMOTE,
                     "阿里云盘 create_session HTTP " + resp.code + ": " + truncate(resp.body, 200));
         }
+        // create_session 响应可能附带新 token（设备会话刷新）：持久化回来，避免用旧 access_token 继续
+        try {
+            if (!resp.body.isBlank()) {
+                var j = new JSONObject(resp.body);
+                var at = j.optString("access_token", "");
+                var rt = j.optString("refresh_token", "");
+                if (!at.isEmpty()) EncryptedCredStore.put(id(), "access_token", at);
+                if (!rt.isEmpty()) EncryptedCredStore.put(id(), "refresh_token", rt);
+            }
+        } catch (Exception ignored) {
+        }
         LogHelp.i(TAG, "阿里云盘设备会话已注册");
     }
 
@@ -495,6 +506,15 @@ public class AliDriveProvider implements CloudProvider {
         h.put("x-request-id", UUID.randomUUID().toString());
         h.put("X-Canary", "client=Android,app=adrive,version=v4.1.0");
         var uid = EncryptedCredStore.get(id(), "user_id");
+        if (uid.isEmpty()) {
+            // 身份未建立（历史崩溃导致 user/get 没跑完）：先补建身份（user/get 允许空签名），
+            // 避免后续所有带签名的业务请求因缺 user_id 全部报「签名派生失败」
+            try {
+                uid = ensureIdentityKeys().uid;
+            } catch (Exception e) {
+                LogHelp.w(TAG, "阿里云盘身份建立失败（签名缺 user_id）: " + e.getMessage());
+            }
+        }
         if (!uid.isEmpty()) {
             ensureSignature(uid);
             h.put("X-Device-Id", deviceId);
@@ -511,7 +531,20 @@ public class AliDriveProvider implements CloudProvider {
         return h;
     }
 
-    /** 确保 userId/deviceId/signature 已派生（签名仅依赖 user_id，可离线计算） */
+    /** 派生结果（deviceId / signature） */
+    private final class Identity {
+        final String uid;
+        final String deviceId;
+        final String signature;
+
+        Identity(String uid, String deviceId, String signature) {
+            this.uid = uid;
+            this.deviceId = deviceId;
+            this.signature = signature;
+        }
+    }
+
+    /** 确保 deviceId / signature 已派生；未派生则按 user_id 计算（签名仅依赖 user_id，可离线复算） */
     private void ensureSignature(String uid) {
         if (uid.equals(userId) && signature != null) return;
         try {
@@ -521,12 +554,13 @@ public class AliDriveProvider implements CloudProvider {
             var hash = MessageDigest.getInstance("SHA-256").digest(message.getBytes(StandardCharsets.UTF_8));
             signature = hex(Secp256k1.sign(hash, deviceKey()));
         } catch (Exception e) {
-            signature = null;
-            LogHelp.e(TAG, "阿里云盘签名派生失败", e);
+            // 派生失败不再静默置空（会污染后续所有带签名请求）：保留旧值并告警
+            LogHelp.e(TAG, "阿里云盘签名派生失败（user_id 前 8 位 " + uid.substring(0, Math.min(8, uid.length())) + "）", e);
         }
     }
 
-    private void ensureIdentityKeys() throws CloudException {
+    /** 建立/补齐身份（user_id / drive_id / nickname），返回当前身份 */
+    private Identity ensureIdentityKeys() throws CloudException {
         var uid = EncryptedCredStore.get(id(), "user_id");
         if (uid.isEmpty()) {
             // 身份未建立：先 user/get（该端点允许空签名）
@@ -537,6 +571,7 @@ public class AliDriveProvider implements CloudProvider {
             throw new CloudException(CloudException.Kind.AUTH_EXPIRED, "阿里云盘身份不可用，请重新登录");
         }
         ensureSignature(uid);
+        return new Identity(uid, deviceId, signature);
     }
 
     private byte[] deviceKey() {

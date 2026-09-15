@@ -73,6 +73,13 @@ public final class CredentialChecker {
         if (!provider.isLoggedIn()) {
             return Status.INVALID;
         }
+        // 阿里云盘：refresh_token 是全部业务 API 的命根子（签名密钥由 user_id 派生、
+        // 身份又依赖刷新成功后的 user/get）。缺 refresh_token 的账号每次进页都重打
+        // 网络 + 派生失败刷错误日志——直接判 INVALID 并熔断（引导重新登录，不再轮询网络）
+        if (CloudAccount.PROVIDER_ALIYUN.equals(account.provider)
+                && EncryptedCredStore.get(account.id, "refresh_token").isEmpty()) {
+            return Status.INVALID;
+        }
         var conn = test(provider);
         if (conn != Status.VALID) {
             return conn;
