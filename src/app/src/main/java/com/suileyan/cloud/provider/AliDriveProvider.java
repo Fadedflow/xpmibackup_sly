@@ -237,10 +237,13 @@ public class AliDriveProvider implements CloudProvider {
     /** 上传单个分片：从本地 offset 读 length 字节 PUT 到预签名地址 */
     private long putPart(String uploadUrl, File localFile, long offset, long length,
                          ProgressCallback cb, String taskId, long totalSize) throws Exception {
+        // 预签名 URL 是阿里云盘按"空 Content-Type"生成的 OSS 签名（对齐 alist：PUT 裸发，无任何自定义头）。
+        // 若请求体带上 Content-Type，OSS 重新计算的规范串会多一个头，与签名时不一致 → 403 SignatureDoesNotMatch。
+        // 因此这里 body 的 MediaType 必须为 null（OkHttp 对 null MediaType 不发送 Content-Type 头）。
         var request = new Request.Builder().url(uploadUrl).put(new RequestBody() {
             @Override
             public MediaType contentType() {
-                return MediaType.parse("application/octet-stream");
+                return null; // 关键：不携带 Content-Type，与预签名一致
             }
 
             @Override

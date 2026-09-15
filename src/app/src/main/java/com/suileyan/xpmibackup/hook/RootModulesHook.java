@@ -873,7 +873,11 @@ public class RootModulesHook {
 
         var tar = com.suileyan.comm.RootModulesHelp.newestTar(com.suileyan.comm.RootModulesHelp.modulesDir());
         if (tar == null) {
-            LogHelp.i(TAG, "RootModulesHook: 无 root_modules_*.tar，跳过注入");
+            // 说明：tar 由「开始备份」时 RootModulesHelp.createTarViaSu 用 su 现场打包 /data/adb/*，
+            // 属设备侧运行时产物而非 APK 内置资源（app 的 assets/ 只有 xposed_init 一个文件，
+            // build.gradle 也无 root_modules 打包任务）。设备无 su 或未装任何管理器时必然无 tar，
+            // 此时跳过注入是正确的——但把原因写进日志，便于区分「无 root」与「误删 tar」。
+            LogHelp.i(TAG, "RootModulesHook: 无 root_modules_*.tar，跳过注入（设备未 root 或管理器目录为空）");
             return;
         }
         // 幂等：列表重建会再次走构造，先查重
