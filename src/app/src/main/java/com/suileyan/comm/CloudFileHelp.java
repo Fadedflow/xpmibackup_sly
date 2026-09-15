@@ -369,9 +369,12 @@ public class CloudFileHelp {
         var buffer = new byte[BUFFER_SIZE];
         var totalWritten = 0L;
 
-        // 分片并行上传（3 线程）：切分串行（顺序读源流），上传并发提交。
+        // 分片并行上传（默认 8 线程；serial_upload=on 时钳到 1，分片也串行，宿主才能逐项 100% 推进）。
         // 沃盘等云盘对单请求限速（实测沃盘上传域当前 ~70KB/s 总吞吐，5 连接共享；并发提到 8 试每连接限速的剩余空间）
-        var executor = java.util.concurrent.Executors.newFixedThreadPool(8);
+        var partThreads = "on".equals(com.suileyan.comm.ConfigHelp.getString("serial_upload", "off"))
+                ? 1
+                : 8;
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(partThreads);
         var futures = new java.util.ArrayList<java.util.concurrent.Future<?>>();
         var uploaded = new java.util.concurrent.atomic.AtomicLong(0L);
         try (var fis = new FileInputStream(localFile)) {

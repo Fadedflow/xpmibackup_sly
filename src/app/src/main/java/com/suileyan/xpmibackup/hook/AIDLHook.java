@@ -80,24 +80,53 @@ public class AIDLHook {
      * 双重检查锁定：避免 check-then-act 竞态导致线程池泄漏（CRIT-05）。
      * 当「串行上传」开关（serial_upload=on）开启时，线程池被钳到 1，
      * 宿主按「一项 100% 完成才下一项」推进；否则沿用 upload_threads 值。
+     *
+     * 注意：LSPosed 注入后，备份运行中用户也可能改勾选。若池已存在且目标线程数
+     * 与现池不符（例如刚勾上 serial_upload 把 3 池变 1 池），重建池——
+     * 旧池里已提交的任务自然跑完，新任务进新池。
      */
     private static ExecutorService getUploadExecutor() {
+        var target = targetUploadThreads();
         var e = uploadExecutor;
         if (e != null && !e.isShutdown()) {
-            return e;
+            // 开关被实时切换：目标线程数变化则重建（FixedThreadPool 池大小不变，只能重建）
+            if (target == eTargetThreads.get()) {
+                return e;
+            }
+            synchronized (AIDLHook.class) {
+                var existing = uploadExecutor;
+                var t = targetUploadThreads();
+                if (existing != null && !existing.isShutdown() && t == eTargetThreads.get()) {
+                    return existing;
+                }
+                var fresh = Executors.newFixedThreadPool(t, DAEMON_THREAD_FACTORY);
+                eTargetThreads.set(t);
+                // 旧池里的任务跑完自然结束，不强行中断；替换静态引用
+                uploadExecutor = fresh;
+                return fresh;
+            }
         }
         synchronized (AIDLHook.class) {
             e = uploadExecutor;
             if (e == null || e.isShutdown()) {
-                var threads = "on".equals(com.suileyan.comm.ConfigHelp.getString("serial_upload", "off"))
-                        ? 1
-                        : Math.max(1, com.suileyan.comm.ConfigHelp.getInt("upload_threads", 3));
-                e = Executors.newFixedThreadPool(threads, DAEMON_THREAD_FACTORY);
+                var t = targetUploadThreads();
+                e = Executors.newFixedThreadPool(t, DAEMON_THREAD_FACTORY);
+                eTargetThreads.set(t);
                 uploadExecutor = e;
             }
             return e;
         }
     }
+
+    /** 目标上传线程数：serial_upload=on 钳到 1，否则读 upload_threads */
+    private static int targetUploadThreads() {
+        return "on".equals(com.suileyan.comm.ConfigHelp.getString("serial_upload", "off"))
+                ? 1
+                : Math.max(1, com.suileyan.comm.ConfigHelp.getInt("upload_threads", 3));
+    }
+
+    /** 当前池对应的目标线程数（重建时比较用；池本身不暴露大小） */
+    private static final java.util.concurrent.atomic.AtomicInteger eTargetThreads = new java.util.concurrent.atomic.AtomicInteger(-1);
 
     /**
      * 在共享守护线程池执行普通DFS模拟回调，避免阻塞AIDL调用线程（NEW-H-01）
