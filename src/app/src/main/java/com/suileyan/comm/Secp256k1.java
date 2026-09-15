@@ -34,8 +34,16 @@ public final class Secp256k1 {
     private Secp256k1() {
     }
 
-    /** 仿射点；ZERO 表示无穷远点 */
-    private record Point(BigInteger x, BigInteger y) {
+    /** 仿射点；ZERO 表示无穷远点（x/y 为 null 时判零） */
+    private static final class Point {
+        final BigInteger x;
+        final BigInteger y;
+
+        Point(BigInteger x, BigInteger y) {
+            this.x = x;
+            this.y = y;
+        }
+
         boolean isZero() {
             return x == null;
         }
@@ -50,7 +58,7 @@ public final class Secp256k1 {
         if (q.isZero()) {
             throw new IllegalArgumentException("invalid private key");
         }
-        return concat(fixed32(q.x()), fixed32(q.y()));
+        return concat(fixed32(q.x), fixed32(q.y));
     }
 
     /**
@@ -68,7 +76,7 @@ public final class Secp256k1 {
         while (true) {
             var k = new BigInteger(N.bitLength(), RANDOM).mod(N.subtract(BigInteger.ONE)).add(BigInteger.ONE);
             var rp = multiply(k, G);
-            var r = rp.x().mod(N);
+            var r = rp.x.mod(N);
             if (r.signum() == 0) continue;
             var s = k.modInverse(N).multiply(z.add(r.multiply(d))).mod(N);
             if (s.signum() == 0) continue;
@@ -100,30 +108,30 @@ public final class Secp256k1 {
     private static Point add(Point a, Point b) {
         if (a.isZero()) return b;
         if (b.isZero()) return a;
-        if (a.x().equals(b.x())) {
-            if (!a.y().equals(b.y())) {
+        if (a.x.equals(b.x)) {
+            if (!a.y.equals(b.y)) {
                 return ZERO; // P + (-P) = O
             }
             return twice(a);
         }
         // 斜率 λ = (y2-y1)/(x2-x1) mod p
-        var slope = b.y().subtract(a.y()).multiply(b.x().subtract(a.x()).modInverse(P)).mod(P);
+        var slope = b.y.subtract(a.y).multiply(b.x.subtract(a.x).modInverse(P)).mod(P);
         return fromSlope(a, b, slope);
     }
 
     /** 二倍：λ = (3x²)/(2y) mod p（曲线 a=0，无 a 项） */
     private static Point twice(Point a) {
-        if (a.isZero() || a.y().signum() == 0) return ZERO;
-        var slope = a.x().modPow(BigInteger.TWO, P)
+        if (a.isZero() || a.y.signum() == 0) return ZERO;
+        var slope = a.x.modPow(BigInteger.TWO, P)
                 .multiply(BigInteger.valueOf(3)).mod(P)
-                .multiply(a.y().shiftLeft(1).mod(P).modInverse(P)).mod(P);
+                .multiply(a.y.shiftLeft(1).mod(P).modInverse(P)).mod(P);
         return fromSlope(a, a, slope);
     }
 
     /** 由斜率求第三交点并翻转 y：x3 = λ²-x1-x2，y3 = λ(x1-x3)-y1 */
     private static Point fromSlope(Point a, Point b, BigInteger slope) {
-        var x3 = slope.modPow(BigInteger.TWO, P).subtract(a.x()).subtract(b.x()).mod(P);
-        var y3 = slope.multiply(a.x().subtract(x3)).subtract(a.y()).mod(P);
+        var x3 = slope.modPow(BigInteger.TWO, P).subtract(a.x).subtract(b.x).mod(P);
+        var y3 = slope.multiply(a.x.subtract(x3)).subtract(a.y).mod(P);
         return new Point(x3, y3);
     }
 
