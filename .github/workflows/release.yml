@@ -54,14 +54,15 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # v4 使用 node24，GitHub runner 尚不支持，降级到 v3（node20，稳定）
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@v3
 
       # 与 app/build.gradle 的 compileSdk 37 / buildTools 37.0.0 保持同步。
-      # 注意 SDK 包名是新命名：platforms;android-17 = Android 17（platforms;android-37 不存在）
+      # 安装 platforms;android-37（API level 37）与 build-tools 37.0.0
       - name: Install SDK components (platform-37 + build-tools 37.0.0)
         run: |
-          sdkmanager --install "platforms;android-17" "build-tools;37.0.0" --sdk_root="$ANDROID_HOME"
+          sdkmanager --install "platforms;android-37" "build-tools;37.0.0" --sdk_root="$ANDROID_HOME"
           yes | sdkmanager --licenses --sdk_root="$ANDROID_HOME" > /dev/null || true
 
       - name: Set up Gradle
