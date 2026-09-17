@@ -607,7 +607,11 @@ public class XunleiProvider implements CloudProvider {
         try {
             return md5Hex(refreshToken());
         } catch (Exception e) {
-            return md5Hex(account.id);
+            try {
+                return md5Hex(account.id);
+            } catch (Exception ex2) {
+                return "xunlei_" + System.currentTimeMillis();
+            }
         }
     }
 
