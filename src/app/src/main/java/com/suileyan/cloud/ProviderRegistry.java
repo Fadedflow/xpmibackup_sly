@@ -11,6 +11,7 @@ import com.suileyan.cloud.provider.SmbProvider;
 import com.suileyan.cloud.provider.TianyiProvider;
 import com.suileyan.cloud.provider.WebdavProvider;
 import com.suileyan.cloud.provider.WoProvider;
+import com.suileyan.cloud.provider.XunleiProvider;
 import com.suileyan.cloud.provider.Yun139Provider;
 import com.suileyan.comm.LogHelp;
 
@@ -82,6 +83,9 @@ public final class ProviderRegistry {
             }
             if (account != null && CloudAccount.PROVIDER_ALIYUN.equals(account.provider)) {
                 return AliDriveProvider.TYPE;
+            }
+            if (account != null && CloudAccount.PROVIDER_XUNLEI.equals(account.provider)) {
+                return XunleiProvider.TYPE;
             }
             // 未知/已删除账号：返回空串，由调用方回退
             return "";
@@ -181,6 +185,9 @@ public final class ProviderRegistry {
         }
         if (CloudAccount.PROVIDER_ALIYUN.equals(account.provider)) {
             return new AliDriveProvider(account);
+        }
+        if (CloudAccount.PROVIDER_XUNLEI.equals(account.provider)) {
+            return new XunleiProvider(account);
         }
         LogHelp.e(TAG, "unsupported cloud provider: " + account.provider);
         return null;

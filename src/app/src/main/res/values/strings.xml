@@ -182,6 +182,8 @@
     <string name="cloud_provider_quark_hint">应用内网页登录</string>
     <string name="cloud_provider_aliyun">阿里云盘</string>
     <string name="cloud_provider_aliyun_hint">应用内网页登录</string>
+    <string name="cloud_provider_xunlei">迅雷网盘</string>
+    <string name="cloud_provider_xunlei_hint">应用内网页登录</string>
     <string name="cloud_provider_123">123云盘</string>
     <string name="cloud_provider_123_hint">应用内网页登录</string>
     <string name="title_webview_login_123">登录 123 云盘</string>
@@ -199,6 +201,7 @@
     <string name="title_webview_login_115">登录 115 网盘</string>
     <string name="title_webview_login_quark">登录夸克云盘</string>
     <string name="title_webview_login_aliyun">登录阿里云盘</string>
+    <string name="title_webview_login_xunlei">登录迅雷网盘</string>
     <string name="title_webview_login">登录 139 云盘</string>
     <string name="title_webview_login_guangya">登录光鸭云盘</string>
     <string name="webview_login_done">完成</string>

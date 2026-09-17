@@ -41,6 +41,10 @@ public class CloudProviderSelectFragment extends Fragment {
                 getString(R.string.cloud_provider_aliyun),
                 getString(R.string.cloud_provider_aliyun_hint),
                 v -> openLogin(WebViewLoginFragment.PROVIDER_ALIYUN)));
+        list.addView(createProviderRow(R.drawable.ic_tab_cloud,
+                getString(R.string.cloud_provider_xunlei),
+                getString(R.string.cloud_provider_xunlei_hint),
+                v -> openLogin(WebViewLoginFragment.PROVIDER_XUNLEI)));
         // 123 云盘已撤销支持（API 宿主迁移后建目录/上传链路不稳定，对外不可用）：
         // 不再展示登录入口；ProviderRegistry 分发保留，存量 123 账号仍可被识别
         // list.addView(createProviderRow(R.drawable.ic_tab_cloud,

@@ -50,6 +50,7 @@ public class WebViewLoginFragment extends Fragment {
     public static final String PROVIDER_WO = "wo";
     public static final String PROVIDER_115 = "115";
     public static final String PROVIDER_ALIYUN = "aliyun";
+    public static final String PROVIDER_XUNLEI = "xunlei";
     public static final String ARG_PROVIDER = "provider";
 
     /** 139 云盘登录页 */
@@ -70,6 +71,8 @@ public class WebViewLoginFragment extends Fragment {
     private static final String URL_115 = "https://115.com/";
     /** 阿里云盘登录页 */
     private static final String URL_ALIYUN = "https://www.alipan.com/";
+    /** 迅雷网盘登录页 */
+    private static final String URL_XUNLEI = "https://pan.xunlei.com/";
 
     /** 桌面版 User-Agent（电脑模式） */
     private static final String DESKTOP_UA =
@@ -169,6 +172,25 @@ public class WebViewLoginFragment extends Fragment {
             + "}catch(e){}}}}catch(e){}}"
             + "scan(window.localStorage);return at+'|||'+rt;})()";
 
+    /**
+     * 迅雷网盘 localStorage 提取脚本：返回 "access|||refresh"。
+     * pan.xunlei.com 网页端把 OAuth token 存 localStorage（键名含 access_token/refresh_token，
+     * 可能为纯字符串或 JSON 对象），显式键名 + 通配扫描双保险（仿阿里云盘）
+     */
+    private static final String EXTRACT_JS_XUNLEI =
+            "(function(){var at='',rt='';"
+            + "try{at=window.localStorage.getItem('access_token')||window.localStorage.getItem('accessToken')||'';}catch(e){}"
+            + "try{rt=window.localStorage.getItem('refresh_token')||window.localStorage.getItem('refreshToken')||'';}catch(e){}"
+            + "function scan(s){try{for(var i=0;i<s.length;i++){"
+            + "var k=s.key(i);var v=s.getItem(k);if(!v||v.length<20)continue;"
+            + "var kl=k.toLowerCase().replace(/_/g,'');"
+            + "if(kl.indexOf('refreshtoken')>=0){if(!rt)rt=v;}"
+            + "else if(kl.indexOf('accesstoken')>=0){if(!at)at=v;}"
+            + "else{try{var o=JSON.parse(v);"
+            + "if(o.refresh_token&&!rt)rt=o.refresh_token;if(o.access_token&&!at)at=o.access_token;"
+            + "}catch(e){}}}}catch(e){}}"
+            + "scan(window.localStorage);return at+'|||'+rt;})()";
+
     private WebView webView;
     private Button btnDone;
     private String provider = PROVIDER_139;
@@ -190,6 +212,9 @@ public class WebViewLoginFragment extends Fragment {
     // ---- 阿里云盘捕获状态 ----
     private volatile String capturedAliToken = "";
     private volatile String capturedAliRefresh = "";
+    // ---- 迅雷网盘捕获状态 ----
+    private volatile String capturedXunleiToken = "";
+    private volatile String capturedXunleiRefresh = "";
 
     /**
      * 初始化界面：按网盘类型配置 WebView 并加载登录页
@@ -225,6 +250,8 @@ public class WebViewLoginFragment extends Fragment {
                 tvTitle.setText(R.string.title_webview_login_115);
             } else if (PROVIDER_ALIYUN.equals(provider)) {
                 tvTitle.setText(R.string.title_webview_login_aliyun);
+            } else if (PROVIDER_XUNLEI.equals(provider)) {
+                tvTitle.setText(R.string.title_webview_login_xunlei);
             } else {
                 tvTitle.setText(R.string.title_webview_login);
             }
@@ -322,6 +349,14 @@ public class WebViewLoginFragment extends Fragment {
                     // 阿里云盘登录页同为 SPA，预注入桌面模式
                     if (request.isForMainFrame() && "GET".equalsIgnoreCase(request.getMethod())
                             && isAliyunHost(request.getUrl().getHost())
+                            && isHtmlPage(request.getUrl().toString())) {
+                        var injected = fetchAndInjectDesktop(request.getUrl().toString());
+                        if (injected != null) return injected;
+                    }
+                } else if (PROVIDER_XUNLEI.equals(provider)) {
+                    // 迅雷网盘登录页同为 SPA，预注入桌面模式
+                    if (request.isForMainFrame() && "GET".equalsIgnoreCase(request.getMethod())
+                            && isXunleiHost(request.getUrl().getHost())
                             && isHtmlPage(request.getUrl().toString())) {
                         var injected = fetchAndInjectDesktop(request.getUrl().toString());
                         if (injected != null) return injected;
@@ -443,6 +478,9 @@ public class WebViewLoginFragment extends Fragment {
                 } else if (PROVIDER_ALIYUN.equals(provider)) {
                     // 阿里云盘：登录态在 localStorage（键含 accesstoken/refreshtoken）
                     view.evaluateJavascript(EXTRACT_JS_ALIYUN, value -> parseAliyunExtract(value));
+                } else if (PROVIDER_XUNLEI.equals(provider)) {
+                    // 迅雷网盘：登录态在 localStorage（键含 access_token/refresh_token）
+                    view.evaluateJavascript(EXTRACT_JS_XUNLEI, value -> parseXunleiExtract(value));
                 } else if (PROVIDER_115.equals(provider)) {
                     // 115：登录态在 Cookie（UID/CID/SEID/KID），点「完成」时合并读取保存
                     var ck115 = capture115Cookie();
@@ -471,7 +509,8 @@ public class WebViewLoginFragment extends Fragment {
                 : PROVIDER_BAIDU.equals(provider) ? URL_BAIDU
                 : PROVIDER_WO.equals(provider) ? URL_WO
                 : PROVIDER_115.equals(provider) ? URL_115
-                : PROVIDER_ALIYUN.equals(provider) ? URL_ALIYUN : URL_139);
+                : PROVIDER_ALIYUN.equals(provider) ? URL_ALIYUN
+                : PROVIDER_XUNLEI.equals(provider) ? URL_XUNLEI : URL_139);
 
         // 返回键：优先让 WebView 后退
         view.setFocusableInTouchMode(true);
@@ -705,6 +744,8 @@ public class WebViewLoginFragment extends Fragment {
             onDone115();
         } else if (PROVIDER_ALIYUN.equals(provider)) {
             onDoneAliyun();
+        } else if (PROVIDER_XUNLEI.equals(provider)) {
+            onDoneXunlei();
         } else {
             onDone139();
         }
@@ -1630,12 +1671,117 @@ public class WebViewLoginFragment extends Fragment {
         }
     }
 
+    /** 解析迅雷网盘 localStorage 扫描结果（"access|||refresh"）并更新捕获状态 */
+    private void parseXunleiExtract(String value) {
+        if (value == null || !value.contains("|||")) return;
+        var cleaned = value.replace("\"", "");
+        var parts = cleaned.split("\\|\\|\\|");
+        if (parts.length < 2) return;
+        var at = parts[0].trim();
+        var rt = parts[1].trim();
+        if (!at.isEmpty() && at.length() > capturedXunleiToken.length()) {
+            capturedXunleiToken = at;
+        }
+        if (!rt.isEmpty() && rt.length() > capturedXunleiRefresh.length()) {
+            capturedXunleiRefresh = rt;
+            LogHelp.i(TAG, "迅雷网盘 localStorage 提取 refresh_token, len=" + rt.length());
+        }
+    }
+
+    /**
+     * 迅雷网盘「完成」：refresh_token 为空时现场重扫一次 localStorage（防「登录后才写入」时序），
+     * 然后走刷新换新验证（refresh_token 轮换即校验有效性），通过后保存
+     */
+    private void onDoneXunlei() {
+        if (capturedXunleiRefresh.isEmpty() && webView != null) {
+            webView.evaluateJavascript(EXTRACT_JS_XUNLEI, value -> {
+                parseXunleiExtract(value);
+                if (getActivity() == null) return;
+                getActivity().runOnUiThread(() -> validateXunlei(capturedXunleiRefresh, null));
+            });
+            return;
+        }
+        validateXunlei(capturedXunleiRefresh, null);
+    }
+
+    /** 迅雷网盘后台验证并保存/恢复（幂等复用已存在账号 id；验证失败恢复旧凭据，HIGH-01） */
+    private void validateXunlei(String refreshToken, String prevRt) {
+        if (refreshToken == null || refreshToken.isEmpty()) {
+            Toast.makeText(getActivity(), R.string.toast_webview_no_auth, Toast.LENGTH_LONG).show();
+            return;
+        }
+        btnDone.setEnabled(false);
+        btnDone.setText(R.string.testing_connection);
+        var id = "xunlei_" + System.currentTimeMillis();
+        // 幂等：复用已存在迅雷网盘账号 id，避免重复保存出现多个账号
+        var existing = CloudAccountStore.list().stream()
+                .filter(a -> CloudAccount.PROVIDER_XUNLEI.equals(a.provider))
+                .findFirst().orElse(null);
+        if (existing != null) id = existing.id;
+        var accountId = id;
+        // 幂等复用场景：先备份旧 refresh_token，验证失败时恢复而非删除账号（HIGH-01）
+        final var prev = prevRt != null ? prevRt
+                : (existing != null ? EncryptedCredStore.get(accountId, "refresh_token") : null);
+        new Thread(() -> {
+            try {
+                EncryptedCredStore.put(accountId, "refresh_token", refreshToken);
+                // 清掉可能残留的旧 access_token，强制走「刷新换新 + 列表」完整链路
+                EncryptedCredStore.put(accountId, "access_token", "");
+                var provider = com.suileyan.cloud.ProviderRegistry.forAccount(
+                        new CloudAccount(accountId, CloudAccount.PROVIDER_XUNLEI, "", "", System.currentTimeMillis()));
+                var ok = provider != null && provider.refresh() && provider.testConnection();
+                if (getActivity() == null) return;
+                getActivity().runOnUiThread(() -> {
+                    btnDone.setEnabled(true);
+                    btnDone.setText(R.string.webview_login_done);
+                    if (ok) {
+                        saveAccountXunlei(accountId);
+                    } else {
+                        rollbackCredential(accountId, "refresh_token", prev);
+                        Toast.makeText(getActivity(), R.string.toast_cloud_auth_invalid, Toast.LENGTH_LONG).show();
+                    }
+                });
+            } catch (Exception e) {
+                LogHelp.e(TAG, "迅雷网盘验证失败", e);
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        btnDone.setEnabled(true);
+                        btnDone.setText(R.string.webview_login_done);
+                        Toast.makeText(getActivity(), R.string.toast_cloud_auth_invalid, Toast.LENGTH_LONG).show();
+                    });
+                }
+            }
+        }, "XpMiBackup-xunlei-validate").start();
+    }
+
+    /** 保存迅雷网盘账号（refresh_token 已在后台验证通过；uid 留空展示「迅雷网盘」） */
+    private void saveAccountXunlei(String id) {
+        try {
+            CloudAccountStore.add(new CloudAccount(id, CloudAccount.PROVIDER_XUNLEI, "",
+                    getString(R.string.cloud_provider_xunlei), System.currentTimeMillis()));
+            LogHelp.i(TAG, "迅雷网盘账号已保存: " + id);
+            finishSave();
+        } catch (Exception e) {
+            LogHelp.e(TAG, "save 迅雷网盘 account failed", e);
+            Toast.makeText(getActivity(), R.string.toast_cloud_account_save_failed, Toast.LENGTH_LONG).show();
+        }
+    }
+
     /** 严格判断主机名是否属于阿里云盘（alipan.com / aliyundrive.com，防相似域名绕过） */
     private static boolean isAliyunHost(String host) {
         if (host == null) return false;
         var h = host.toLowerCase(java.util.Locale.ROOT);
         return h.equals("www.alipan.com") || h.endsWith(".alipan.com")
                 || h.equals("www.aliyundrive.com") || h.endsWith(".aliyundrive.com");
+    }
+
+    /** 严格判断主机名是否属于迅雷网盘（pan.xunlei.com / x-api-pan.xunlei.com，防相似域名绕过） */
+    private static boolean isXunleiHost(String host) {
+        if (host == null) return false;
+        var h = host.toLowerCase(java.util.Locale.ROOT);
+        return h.equals("pan.xunlei.com") || h.endsWith(".pan.xunlei.com")
+                || h.equals("x-api-pan.xunlei.com") || h.endsWith(".x-api-pan.xunlei.com")
+                || h.equals("xluser-ssl.xunlei.com") || h.endsWith(".xluser-ssl.xunlei.com");
     }
 
     private void finishSave() {
