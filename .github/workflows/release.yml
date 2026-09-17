@@ -54,18 +54,23 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # 手动安装 Android SDK 组件。ubuntu-latest runner 已预装 cmdline-tools，
-      # 不依赖 android-actions/setup-android（其 node 运行时在 runner 上兼容性差，
-      # 日志报 Node.js v24.19.0 后卡死）。直接定位 sdkmanager 安装所需组件。
-      - name: Install Android SDK components (platform-37 + build-tools 37.0.0)
+      # 用 curl 下载官方 cmdline-tools 并安装 SDK 组件。
+      # 不依赖 android-actions/setup-android（node20 已被 runner 弃用，强制 node24 后失败）
+      # 也不依赖 runner 预装 SDK（路径不确定）。完全自包含，最可靠。
+      - name: Install Android SDK (cmdline-tools + platform-37 + build-tools)
         run: |
-          export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           export ANDROID_SDK_ROOT="$ANDROID_HOME"
-          SDKMANAGER="$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")"
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          # 下载官方 cmdline-tools（Linux，最新版）
+          curl -sSL -o /tmp/cmdline-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-16111833_latest.zip"
+          unzip -q /tmp/cmdline-tools.zip -d /tmp/cmdline-tools
+          mv /tmp/cmdline-tools/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
           echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "Using sdkmanager: $SDKMANAGER"
-          "$SDKMANAGER" --install "platform-tools" "platforms;android-37" "build-tools;37.0.0" --sdk_root="$ANDROID_HOME"
-          yes | "$SDKMANAGER" --licenses --sdk_root="$ANDROID_HOME" > /dev/null || true
+          ls -la "$ANDROID_HOME/cmdline-tools/latest/bin/"
+          # 接受许可 + 安装组件
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses --sdk_root="$ANDROID_HOME" > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platform-tools" "platforms;android-37" "build-tools;37.0.0" --sdk_root="$ANDROID_HOME"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
