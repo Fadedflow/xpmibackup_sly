@@ -54,23 +54,14 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # 用 curl 下载官方 cmdline-tools 并安装 SDK 组件。
-      # 不依赖 android-actions/setup-android（node20 已被 runner 弃用，强制 node24 后失败）
-      # 也不依赖 runner 预装 SDK（路径不确定）。完全自包含，最可靠。
-      - name: Install Android SDK (cmdline-tools + platform-37 + build-tools)
+      # ubuntu-latest runner 已预装完整 Android SDK（ANDROID_HOME=/usr/local/lib/android/sdk），
+      # 包含 platforms;android-37.0 与 build-tools;37.0.0，与 build.gradle 完全匹配，无需额外安装。
+      # 不依赖 android-actions/setup-android（node20 已被 runner 弃用，强制 node24 后失败）。
+      - name: Verify Android SDK
         run: |
-          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          export ANDROID_SDK_ROOT="$ANDROID_HOME"
-          mkdir -p "$ANDROID_HOME/cmdline-tools"
-          # 下载官方 cmdline-tools（Linux，最新版）
-          curl -sSL -o /tmp/cmdline-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-16111833_latest.zip"
-          unzip -q /tmp/cmdline-tools.zip -d /tmp/cmdline-tools
-          mv /tmp/cmdline-tools/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
           echo "ANDROID_HOME=$ANDROID_HOME"
-          ls -la "$ANDROID_HOME/cmdline-tools/latest/bin/"
-          # 接受许可 + 安装组件
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses --sdk_root="$ANDROID_HOME" > /dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platform-tools" "platforms;android-37" "build-tools;37.0.0" --sdk_root="$ANDROID_HOME"
+          ls "$ANDROID_HOME/platforms/" | grep android-37 || true
+          ls "$ANDROID_HOME/build-tools/" | grep 37 || true
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
